@@ -1,2 +1,2 @@
-from .annotation import *
+from .phpdoc import *
 from .comment import *

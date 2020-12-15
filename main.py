@@ -5,7 +5,8 @@ from glob import glob
 from colorama import Fore
 
 from internal import spec
-from internal.gen.php import PHPGenerator
+from internal.codegen.php import PHPGenerator
+from internal.codegen.ts import TSGenerator
 
 
 def main():
@@ -24,6 +25,8 @@ def main():
 
     if lang == 'php':
         gen = PHPGenerator()
+    elif lang == "ts":
+        gen = TSGenerator()
     else:
         print(
             Fore.RED + "[FAIL] unsupported lang '{0}'".format(lang) + Fore.RESET)
@@ -44,7 +47,6 @@ def main():
 
     for spec_file in spec_files:
         sp = spec.parse_file(spec_file)
-        s = gen.generate(sp)
 
         if not path.isdir(sp.out_dir()):
             os.makedirs(sp.out_dir())
@@ -52,9 +54,10 @@ def main():
                 Fore.YELLOW + "[WARN] output directory '{0}' has been created".format(sp.out_dir()) + Fore.RESET)
 
         out_dir = path.abspath(sp.out_dir())
+        out_file = path.join(out_dir, "{0}{1}".format(gen.get_clazz(sp), gen.get_extension()))
 
-        with open(path.join(out_dir, "{0}.php".format(sp.source().clazz())), "w", encoding="utf-8") as fp:
-            fp.write(s)
+        with open(out_file, "w", encoding="utf-8") as fp:
+            gen.generate(sp, fp)
 
 
 if __name__ == '__main__':

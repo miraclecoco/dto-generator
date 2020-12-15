@@ -1,15 +1,15 @@
 from typing import List, Optional
 
-from .phpdoc import Annotation
+from .typedoc import Annotation
 
 
 class Comment:
-    def __init__(self, docstring: str = None, annotations: List[Annotation] = None) -> None:
-        self._desc = docstring
+    def __init__(self, desc: str = None, annotations: List[Annotation] = None) -> None:
+        self._decs = desc
         self._annotations = annotations
 
     def desc(self) -> Optional[str]:
-        return self._desc
+        return self._decs
 
     def annotations(self) -> Optional[List[Annotation]]:
         return self._annotations
