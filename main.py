@@ -9,10 +9,24 @@ from internal.gen.php import PHPGenerator
 
 
 def main():
-    spec_dir = sys.argv[1] if len(sys.argv) > 1 else ''
+    lang = sys.argv[1] if len(sys.argv) >= 2 else ''
+    spec_dir = sys.argv[2] if len(sys.argv) >= 3 else ''
+
+    if not lang:
+        print(
+            Fore.RED + "[FAIL] 'lang' must be specified".format(spec_dir) + Fore.RESET)
+        return
+
     if not path.isdir(spec_dir):
         print(
             Fore.RED + "[FAIL] could not find directory '{0}'".format(spec_dir) + Fore.RESET)
+        return
+
+    if lang == 'php':
+        gen = PHPGenerator()
+    else:
+        print(
+            Fore.RED + "[FAIL] unsupported lang '{0}'".format(lang) + Fore.RESET)
         return
 
     spec_dir = path.abspath(spec_dir)
@@ -30,7 +44,6 @@ def main():
 
     for spec_file in spec_files:
         sp = spec.parse_file(spec_file)
-        gen = PHPGenerator()
         s = gen.generate(sp)
 
         if not path.isdir(sp.out_dir()):
