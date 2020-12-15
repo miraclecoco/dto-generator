@@ -1,7 +1,7 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Tuple
 from colorama import Fore
 
-from internal.spec import Field, Spec
+from internal.spec import Field, Spec, Group
 from internal.gen import Generator
 from internal.lang.php import Comment, VarAnnotation, ReturnAnnotation, ParamAnnotation
 
@@ -22,9 +22,9 @@ class {clazz} {{
 
 {constructor}
 
-{fromJson}
+{deserializers}
 
-{toJson}
+{serializers}
 }}
 """) + "\n"
 
@@ -88,15 +88,12 @@ def generate_class_member(field: Field) -> str:
 
 
 def generate_multi_class_members(fields: List[Field]) -> str:
-    s = ""
+    members = []
 
     for field in fields:
-        s += "{0}\n\n".format(generate_class_member(field))
+        members.append(generate_class_member(field))
 
-    if s[-2:] == "\n\n":
-        s = s[:-2]
-
-    return s
+    return "\n\n".join(members)
 
 
 def generate_constructor(fields: List[Field]) -> str:
@@ -123,7 +120,37 @@ def generate_constructor(fields: List[Field]) -> str:
     return s
 
 
-def generate_from_array_method(clazz: str, fields: List[Field]) -> str:
+def generate_simple_serialize_method(func_name: str, fields: List[Tuple[str, str, str]]) -> str:
+    s = ""
+    s += generate_comment(Comment(
+        None, [
+            ReturnAnnotation("array")
+        ]
+    ))
+    s += "\n"
+    s += "public function {0}() {{\n".format(func_name)
+
+    assigns = ""
+    for field in fields:
+        fn = get_php_type_fn(field[0])
+        var = field[1]
+        key = field[2]
+
+        if fn is not None:
+            assigns += "\"{0}\" => {1}($this->{2}),\n".format(key, fn, var)
+        else:
+            assigns += "\"{0}\" => $this->{1},\n".format(key, var)
+
+    if assigns[-2:] == ",\n":
+        assigns = assigns[:-2] + "\n"
+
+    s += "return array(\n{0});\n".format(assigns)
+    s += "}"
+
+    return s
+
+
+def generate_simple_deserialize_method(func_name: str, clazz: str, fields: List[Tuple[str, str]]) -> str:
     s = ""
     s += generate_comment(Comment(
         None, [
@@ -132,16 +159,16 @@ def generate_from_array_method(clazz: str, fields: List[Field]) -> str:
         ]
     ))
     s += "\n"
-    s += "public static function fromArray($json) {\n"
+    s += "public static function {0}($json) {{\n".format(func_name)
 
     args = ""
     for field in fields:
-        fn = get_php_type_fn(field.type())
+        fn = get_php_type_fn(field[0])
 
         if fn is not None:
-            args += "{0}($json[\"{1}\"]), ".format(fn, field.name())
+            args += "{0}($json[\"{1}\"]), ".format(fn, field[1])
         else:
-            args += "$json[\"{0}\"], ".format(field.name())
+            args += "$json[\"{0}\"], ".format(field[1])
 
     if args[-2:] == ", ":
         args = args[:-2]
@@ -153,32 +180,75 @@ def generate_from_array_method(clazz: str, fields: List[Field]) -> str:
 
 
 def generate_to_array_method(fields: List[Field]) -> str:
-    s = ""
-    s += generate_comment(Comment(
-        None, [
-            ReturnAnnotation("array")
-        ]
-    ))
-    s += "\n"
-    s += "public function toArray() {\n"
+    return generate_simple_serialize_method('toArray', [(x.type(), x.name(), x.name()) for x in fields])
 
-    assigns = ""
+
+def generate_from_array_method(clazz: str, fields: List[Field]) -> str:
+    return generate_simple_deserialize_method("fromArray", clazz, [(x.type(), x.name()) for x in fields])
+
+
+def aggregate_groups_from_fields(fields: List[Field]) -> Dict[str, List[Tuple[Group, Field]]]:
+    bucket = {}
+
     for field in fields:
-        var = field.name()
-        fn = get_php_type_fn(field.type())
+        if field.groups() is not None:
+            for group in field.groups():
+                if group.name() not in bucket:
+                    bucket[group.name()] = []
 
-        if fn is not None:
-            assigns += "\"{0}\" => {1}($this->{2}),\n".format(var, fn, var)
-        else:
-            assigns += "\"{0}\" => $this->{1},\n".format(var, var)
+                bucket[group.name()].append((group, field))
 
-    if assigns[-2:] == ",\n":
-        assigns = assigns[:-2] + "\n"
+    return bucket
 
-    s += "return array(\n{0});\n".format(assigns)
-    s += "}"
 
-    return s
+def generate_serializers_by_alias(fields: List[Field]) -> List[str]:
+    ag = aggregate_groups_from_fields(fields)
+    methods = []
+
+    for item in ag.items():
+        group_name = item[0]
+        tups = item[1]
+
+        func_name = 'to' + group_name[0:1].upper() + group_name[1:]
+
+        methods.append(
+            generate_simple_serialize_method(func_name,
+                                             [(tup[1].type(), tup[1].name(), tup[0].member()) for tup in tups]))
+
+    return methods
+
+
+def generate_deserializers_by_alias(clazz: str, fields: List[Field]) -> List[str]:
+    ag = aggregate_groups_from_fields(fields)
+    methods = []
+
+    for item in ag.items():
+        group_name = item[0]
+        fields = item[1]
+
+        func_name = 'from' + group_name[0:1].upper() + group_name[1:]
+
+        methods.append(generate_simple_deserialize_method(func_name, clazz, fields))
+
+    return methods
+
+
+def generate_serializers(spec: Spec) -> str:
+    methods = [
+        generate_to_array_method(spec.fields()),
+        *generate_serializers_by_alias(spec.fields()),
+    ]
+
+    return '\n\n'.join(methods)
+
+
+def generate_deserializers(spec: Spec) -> str:
+    methods = [
+        generate_from_array_method(spec.source().clazz(), spec.fields()),
+        *generate_deserializers_by_alias(spec.source().clazz(), spec.fields()),
+    ]
+
+    return '\n\n'.join(methods)
 
 
 class PHPGenerator(Generator):
@@ -197,7 +267,7 @@ class PHPGenerator(Generator):
             "clazz": spec.source().clazz(),
             "properties": generate_multi_class_members(spec.fields()),
             "constructor": generate_constructor(spec.fields()),
-            "fromJson": generate_from_array_method(spec.source().clazz(), spec.fields()),
-            "toJson": generate_to_array_method(spec.fields())
+            "deserializers": generate_deserializers(spec),
+            "serializers": generate_serializers(spec),
         }
         return TEMPLATE.format(**tpl_args)

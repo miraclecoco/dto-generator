@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Optional
 
 from .util import check_key
 
@@ -23,11 +23,31 @@ class Source:
         return self._clazz
 
 
+class Group:
+    def __init__(self, name: str, member: str):
+        self._name = name
+        self._member = member
+
+    @staticmethod
+    def from_json(json: dict):
+        check_key(json, "name")
+        check_key(json, "member")
+
+        return Group(json["name"], json["member"])
+
+    def name(self) -> str:
+        return self._name
+
+    def member(self) -> str:
+        return self._member
+
+
 class Field:
-    def __init__(self, name: str, typ: str, comment: str) -> None:
+    def __init__(self, name: str, typ: str, comment: str = None, groups: List[Group] = None) -> None:
         self._name = name
         self._typ = typ
         self._comment = comment
+        self._groups = groups
 
     @staticmethod
     def from_json(json: dict) -> 'Field':
@@ -37,7 +57,15 @@ class Field:
         if "commit" not in json:
             json["comment"] = None
 
-        return Field(json["name"], json["type"], json["comment"])
+        if "aliases" not in json:
+            json["aliases"] = None
+
+        if "groups" not in json:
+            json["groups"] = None
+        else:
+            json["groups"] = [Group.from_json(x) for x in json["groups"]]
+
+        return Field(json["name"], json["type"], json["comment"], json["groups"])
 
     def name(self) -> str:
         return self._name
@@ -45,8 +73,11 @@ class Field:
     def type(self) -> str:
         return self._typ
 
-    def comment(self) -> str:
+    def comment(self) -> Optional[str]:
         return self._comment
+
+    def groups(self) -> Optional[List[Group]]:
+        return self._groups
 
 
 class Spec:
