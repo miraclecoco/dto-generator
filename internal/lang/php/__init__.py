@@ -1,2 +1,2 @@
-from annotation import *
-from comment import *
+from .annotation import *
+from .comment import *

@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from internal.lang.php import Annotation
+from .annotation import Annotation
 
 
 class Comment:

@@ -1,6 +1,7 @@
 import json
 from typing import List
-from util import check_key
+
+from .util import check_key
 
 
 class Source:
@@ -57,7 +58,7 @@ class Spec:
     @staticmethod
     def from_json(json: dict) -> 'Spec':
         check_key(json, "outDir")
-        check_key(json, "type")
+        check_key(json, "source")
         check_key(json, "fields")
 
         return Spec(

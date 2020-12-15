@@ -1,7 +1,7 @@
 from typing import List
 from colorama import Fore
 
-from internal import spec
+from internal.spec import Field, Spec
 from internal.gen import Generator
 from internal.lang.php import Comment, VarAnnotation, ReturnAnnotation
 
@@ -60,7 +60,7 @@ def generate_comment(comment: Comment) -> str:
     return s
 
 
-def generate_class_member(field: spec.Field) -> str:
+def generate_class_member(field: Field) -> str:
     s = ""
     s += generate_comment(Comment(
         field.comment(),
@@ -72,7 +72,7 @@ def generate_class_member(field: spec.Field) -> str:
     return s
 
 
-def generate_multi_class_members(fields: List[spec.Field]) -> str:
+def generate_multi_class_members(fields: List[Field]) -> str:
     s = ""
 
     for field in fields:
@@ -84,7 +84,7 @@ def generate_multi_class_members(fields: List[spec.Field]) -> str:
     return s
 
 
-def generate_constructor(fields: List[spec.Field]) -> str:
+def generate_constructor(fields: List[Field]) -> str:
     s = ""
     s += generate_comment(Comment(
         None,
@@ -111,7 +111,7 @@ def generate_constructor(fields: List[spec.Field]) -> str:
     return s
 
 
-def generate_from_json_method(clazz: str, fields: List[spec.Field]) -> str:
+def generate_from_json_method(clazz: str, fields: List[Field]) -> str:
     s = ""
     s += generate_comment(Comment(
         None, [
@@ -135,7 +135,7 @@ def generate_from_json_method(clazz: str, fields: List[spec.Field]) -> str:
     return s
 
 
-def generate_to_json_method(fields: List[spec.Field]) -> str:
+def generate_to_json_method(fields: List[Field]) -> str:
     s = ""
     s += generate_comment(Comment(
         None, [
@@ -163,19 +163,19 @@ class PHPGenerator(Generator):
     def __init__(self):
         pass
 
-    def generate(self, sp: spec.Spec) -> str:
+    def generate(self, spec: Spec) -> str:
         print(
             Fore.GREEN + "[DEBUG] class '{0}\\{1}' is being generated...".format(
-                sp.source().namespace(),
-                sp.source().clazz()
+                spec.source().namespace(),
+                spec.source().clazz()
             ) + Fore.RESET)
 
         tpl_args = {
-            "namespace": sp.source().namespace(),
-            "clazz": sp.source().clazz(),
-            "properties": generate_multi_class_members(sp.fields()),
-            "constructor": generate_constructor(sp.fields()),
-            "fromJson": generate_from_json_method(sp.source().clazz(), sp.fields()),
-            "toJson": generate_to_json_method(sp.fields())
+            "namespace": spec.source().namespace(),
+            "clazz": spec.source().clazz(),
+            "properties": generate_multi_class_members(spec.fields()),
+            "constructor": generate_constructor(spec.fields()),
+            "fromJson": generate_from_json_method(spec.source().clazz(), spec.fields()),
+            "toJson": generate_to_json_method(spec.fields())
         }
         return TEMPLATE.format(**tpl_args)
