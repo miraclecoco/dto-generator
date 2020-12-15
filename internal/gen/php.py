@@ -164,8 +164,13 @@ def generate_to_json_method(fields: List[Field]) -> str:
 
     assigns = ""
     for field in fields:
-        k = field.name()
-        assigns += "\"{0}\" => $this->{1},\n".format(k, k)
+        var = field.name()
+        fn = get_php_type_fn(field.type())
+
+        if fn is not None:
+            assigns += "\"{0}\" => {1}($this->{2}),\n".format(var, fn, var)
+        else:
+            assigns += "\"{0}\" => $this->{1},\n".format(var, var)
 
     if assigns[-2:] == ",\n":
         assigns = assigns[:-2] + "\n"
