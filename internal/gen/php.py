@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from colorama import Fore
 
 from internal.spec import Field, Spec
@@ -28,17 +28,32 @@ class {clazz} {{
 }}
 """) + "\n"
 
-PHP_TYPES = {
+PHP_TYPE = {
+    "string": "string",
     "integer": "int",
     "float": "float",
     "double": "double",
-    "string": "string",
     "boolean": "bool",
 }
 
+PHP_TYPE_FN = {
+    "string": "strval",
+    "int": "intval",
+    "float": "floatval",
+    "double": "doubleval",
+    "bool": "boolval",
+}
 
-def get_php_type(typ: str):
-    return PHP_TYPES[typ] if typ in PHP_TYPES else typ
+
+def get_php_type(typ: str) -> str:
+    return PHP_TYPE[typ] if typ in PHP_TYPE else typ
+
+
+def get_php_type_fn(typ: str) -> Optional[str]:
+    if get_php_type(typ) not in PHP_TYPE_FN:
+        return None
+
+    return PHP_TYPE_FN[get_php_type(typ)]
 
 
 def generate_comment(comment: Comment) -> str:
@@ -64,7 +79,7 @@ def generate_class_member(field: Field) -> str:
     s = ""
     s += generate_comment(Comment(
         field.comment(),
-        [VarAnnotation(get_php_type(field.typ()))]
+        [VarAnnotation(get_php_type(field.type()))]
     ))
     s += "\n"
     s += "public ${0};".format(field.name())
@@ -87,12 +102,9 @@ def generate_multi_class_members(fields: List[Field]) -> str:
 def generate_constructor(fields: List[Field]) -> str:
     s = ""
     s += generate_comment(Comment(
-        None,
-        [ParamAnnotation(
-            get_php_type(field.typ()),
-            field.name(),
-            field.comment()
-        ) for field in fields]
+        None, [
+            ParamAnnotation(get_php_type(field.type()), field.name(), field.comment()) for field in fields
+        ]
     ))
     s += "\n"
 
@@ -124,7 +136,12 @@ def generate_from_json_method(clazz: str, fields: List[Field]) -> str:
 
     args = ""
     for field in fields:
-        args += "$json[\"{0}\"], ".format(field.name())
+        fn = get_php_type_fn(field.type())
+
+        if fn is not None:
+            args += "{0}($json[\"{1}\"]), ".format(fn, field.name())
+        else:
+            args += "$json[\"{0}\"], ".format(field.name())
 
     if args[-2:] == ", ":
         args = args[:-2]

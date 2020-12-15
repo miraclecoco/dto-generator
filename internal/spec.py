@@ -42,7 +42,7 @@ class Field:
     def name(self) -> str:
         return self._name
 
-    def typ(self) -> str:
+    def type(self) -> str:
         return self._typ
 
     def comment(self) -> str:
