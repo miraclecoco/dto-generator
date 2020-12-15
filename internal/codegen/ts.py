@@ -1,5 +1,7 @@
 from typing import IO, List, Optional
 
+from colorama import Fore
+
 from internal.lang.ts import Comment, ParamAnnotation
 from internal.spec import Spec, Field, aggregate_groups_from_fields
 from internal.codegen import Generator
@@ -266,6 +268,11 @@ class TSGenerator(Generator):
         return spec.lang().ts().clazz()
 
     def generate(self, spec: Spec, fp: IO) -> None:
+        print(
+            Fore.GREEN + "[DEBUG] class '{0}' is being generated...".format(
+                spec.lang().ts().clazz()
+            ) + Fore.RESET)
+
         s = TEMPLATE.format(**{
             "clazz": spec.lang().ts().clazz(),
             "members": generate_members(spec.fields()),
