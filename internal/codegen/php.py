@@ -80,11 +80,14 @@ def generate_comment(comment: Comment) -> str:
 
 
 def generate_member(field: Field) -> str:
-    s = ""
-    s += generate_comment(Comment(field.comment(), [
+    comment = Comment(field.comment(), [
         VarAnnotation(get_php_type(field.type()))
-    ]))
-    s += "\n"
+    ])
+
+    s = ""
+    if comment.needs_generate():
+        s += generate_comment(comment)
+        s += "\n"
     s += "public ${0};".format(field.name())
 
     return s
@@ -107,11 +110,16 @@ def generate_constructor(fields: List[Field]) -> str:
         arguments.append("${0}".format(field.name()))
         assignments.append("$this->{0} = ${0};".format(field.name()))
 
-    s = ""
-    s += generate_comment(Comment(None, [
+    comment = Comment(None, [
         ParamAnnotation(get_php_type(field.type()), field.name(), field.comment()) for field in fields
-    ]))
-    s += "\n"
+    ])
+
+    s = ""
+
+    if comment.needs_generate():
+        s += generate_comment(comment)
+        s += "\n"
+
     s += "public function __construct({0}) {{\n{1}\n}}".format(", ".join(arguments), "\n".join(assignments))
 
     return s
@@ -144,11 +152,16 @@ def generate_simple_serialize_method(method_name: str, fields: List[SerializingF
 
         elements.append('"{0}" => {1}'.format(field.serialized_name(), lval))
 
-    s = ""
-    s += generate_comment(Comment(None, [
+    comment = Comment(None, [
         ReturnAnnotation("array")
-    ]))
-    s += "\n"
+    ])
+
+    s = ""
+
+    if comment.needs_generate():
+        s += generate_comment(comment)
+        s += "\n"
+
     s += "public function {0}() {{\nreturn array({1});\n}}".format(
         method_name, ", ".join(elements)
     )
@@ -191,12 +204,17 @@ def generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fie
             '$json["{0}"]'.format(field.serialized_name()), lval
         )
 
-    s = ""
-    s += generate_comment(Comment(None, [
+    comment = Comment(None, [
         ParamAnnotation("array", "json"),
         ReturnAnnotation(clazz)
-    ]))
-    s += "\n"
+    ])
+
+    s = ""
+
+    if comment.needs_generate():
+        s += generate_comment(comment)
+        s += "\n"
+
     s += "public static function {0}($json) {{\nreturn new {1}({2});\n}}".format(
         method_name, clazz, ", ".join(arguments)
     )

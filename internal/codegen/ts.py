@@ -77,9 +77,13 @@ def generate_comment(comment: Comment) -> str:
 
 
 def generate_member(field: Field) -> 'str':
+    comment = Comment(field.comment())
     s = ""
-    s += generate_comment(Comment(field.comment()))
-    s += "\n"
+
+    if comment.needs_generate():
+        s += generate_comment(comment)
+        s += "\n"
+
     s += "public {0}: {1};".format(field.name(), get_ts_type(field.type()))
 
     return s
@@ -91,7 +95,7 @@ def generate_members(fields: List[Field]):
     for field in fields:
         members.append(generate_member(field))
 
-    return "\n".join(members)
+    return "\n\n".join(members)
 
 
 def generate_constructor(fields: List[Field]):
@@ -102,12 +106,16 @@ def generate_constructor(fields: List[Field]):
         arguments.append("{0}: {1}".format(field.name(), get_ts_type(field.type())))
         assignments.append("this.{0} = {0};".format(field.name()))
 
-    s = ""
-    s = ""
-    s += generate_comment(Comment(None, [
+    comment = Comment(None, [
         ParamAnnotation(field.name(), field.comment()) for field in fields
-    ]))
-    s += "\n"
+    ])
+
+    s = ""
+
+    if comment.needs_generate():
+        s += generate_comment(comment)
+        s += "\n"
+
     s += "public constructor({0}) {{\n{1}\n}}".format(", ".join(arguments), "\n".join(assignments))
 
     return s

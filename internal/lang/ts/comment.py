@@ -15,4 +15,4 @@ class Comment:
         return self._annotations
 
     def needs_generate(self) -> bool:
-        return self.desc() is not None or self.annotations() is not None
+        return not not self.desc() or not not self.annotations()
