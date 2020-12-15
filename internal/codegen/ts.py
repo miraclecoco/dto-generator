@@ -149,7 +149,7 @@ def generate_simple_serialize_method(method_name: str, fields: List[SerializingF
         elements.append("\"{0}\": {1}".format(field.serialized_name(), lval))
 
     s = ""
-    s += "public {0}() {{\nreturn {{{1}}};\n}}".format(
+    s += "public {0}(): any {{\nreturn {{{1}}};\n}}".format(
         method_name, ", ".join(elements)
     )
 
@@ -192,7 +192,7 @@ def generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fie
         )
 
     s = ""
-    s += "public static {0}(json): {1} {{\nreturn new {1}({2});\n}}".format(
+    s += "public static {0}(json: any): {1} {{\nreturn new {1}({2});\n}}".format(
         method_name, clazz, ", ".join(arguments)
     )
 
