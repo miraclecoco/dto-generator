@@ -224,11 +224,12 @@ def generate_deserializers_by_alias(clazz: str, fields: List[Field]) -> List[str
 
     for item in ag.items():
         group_name = item[0]
-        fields = item[1]
+        tups = item[1]
 
         func_name = 'from' + group_name[0:1].upper() + group_name[1:]
 
-        methods.append(generate_simple_deserialize_method(func_name, clazz, fields))
+        methods.append(
+            generate_simple_deserialize_method(func_name, clazz, [(tup[1].type(), tup[1].name()) for tup in tups]))
 
     return methods
 
