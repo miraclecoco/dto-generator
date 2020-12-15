@@ -6,6 +6,10 @@ from internal.gen import Generator
 from internal.lang.php import Comment, VarAnnotation, ReturnAnnotation, ParamAnnotation
 
 
+def upper_first(s: str):
+    return s[0:1].upper() + s[1:]
+
+
 def code(s: str) -> str:
     return s.strip()
 
@@ -57,19 +61,21 @@ def get_php_type_fn(typ: str) -> Optional[str]:
 
 
 def generate_comment(comment: Comment) -> str:
-    # if not comment.needs_generate():
-    # return ""
+    if not comment.needs_generate():
+        return ""
+
+    lines = []
+
+    if comment.docstring() is not None:
+        lines.append("{0}".format(comment.docstring()))
+        lines.append("")
+
+    for annotation in comment.annotations():
+        lines.append("@{0} {1}".format(annotation.name(), annotation.value()))
 
     s = ""
     s += "/**\n"
-
-    if comment.docstring() is not None:
-        s += " * {0}\n".format(comment.docstring())
-        s += " *\n"
-
-    for at in comment.annotations():
-        s += " * @{0} {1}\n".format(at.name(), at.value())
-
+    s += " * " + "\n * ".join(lines) + "\n"
     s += " */"
 
     return s
@@ -78,8 +84,9 @@ def generate_comment(comment: Comment) -> str:
 def generate_class_member(field: Field) -> str:
     s = ""
     s += generate_comment(Comment(
-        field.comment(),
-        [VarAnnotation(get_php_type(field.type()))]
+        field.comment(), [
+            VarAnnotation(get_php_type(field.type()))
+        ]
     ))
     s += "\n"
     s += "public ${0};".format(field.name())
@@ -97,139 +104,173 @@ def generate_multi_class_members(fields: List[Field]) -> str:
 
 
 def generate_constructor(fields: List[Field]) -> str:
+    arguments = []
+    assignments = []
+
+    for field in fields:
+        arguments.append("${0}".format(field.name()))
+        assignments.append("$this->{0} = ${1};".format(field.name(), field.name()))
+
     s = ""
     s += generate_comment(Comment(
-        None, [
+        "Constructor", [
             ParamAnnotation(get_php_type(field.type()), field.name(), field.comment()) for field in fields
         ]
     ))
     s += "\n"
-
-    args = ""
-    assigns = ""
-
-    for field in fields:
-        args += "${0}, ".format(field.name())
-        assigns += "$this->{0} = ${1};\n".format(field.name(), field.name())
-
-    if args[-2:] == ", ":
-        args = args[:-2]
-
-    s += "public function __construct({0}) {{\n{1}}}".format(args, assigns)
+    s += "public function __construct({0}) {{\n{1}\n}}".format(", ".join(arguments), "\n".join(assignments))
 
     return s
 
 
-def generate_simple_serialize_method(func_name: str, fields: List[Tuple[str, str, str]]) -> str:
-    s = ""
-    s += generate_comment(Comment(
-        None, [
-            ReturnAnnotation("array")
-        ]
-    ))
-    s += "\n"
-    s += "public function {0}() {{\n".format(func_name)
+class SerializingField:
+    def __init__(self, name: str, typ: str, serialized_name: str):
+        self._name = name
+        self._typ = typ
+        self._serialized_name = serialized_name
 
-    assigns = ""
+    def name(self) -> str:
+        return self._name
+
+    def type(self) -> str:
+        return self._typ
+
+    def serialized_name(self) -> str:
+        return self._serialized_name
+
+    def convert_func(self) -> Optional[str]:
+        return get_php_type_fn(self.type())
+
+
+def generate_simple_serialize_method(method_name: str, fields: List[SerializingField]) -> str:
+    elements = []
+
     for field in fields:
-        fn = get_php_type_fn(field[0])
-        var = field[1]
-        key = field[2]
-
-        if fn is not None:
-            assigns += "\"{0}\" => {1}($this->{2}),\n".format(key, fn, var)
+        if field.convert_func() is not None:
+            elements.append("\"{0}\" => {1}($this->{2})".format(
+                field.serialized_name(), field.convert_func(), field.name()
+            ))
         else:
-            assigns += "\"{0}\" => $this->{1},\n".format(key, var)
+            elements.append("\"{0}\" => $this->{1},".format(field.serialized_name(), field.name()))
 
-    if assigns[-2:] == ",\n":
-        assigns = assigns[:-2] + "\n"
-
-    s += "return array(\n{0});\n".format(assigns)
+    s = ""
+    s += generate_comment(Comment(None, [
+        ReturnAnnotation("array")
+    ]))
+    s += "\n"
+    s += "public function {0}() {{\n".format(method_name)
+    s += "return array(\n{0}\n);\n".format(", \n".join(elements))
     s += "}"
 
     return s
 
 
-def generate_simple_deserialize_method(func_name: str, clazz: str, fields: List[Tuple[str, str]]) -> str:
-    s = ""
-    s += generate_comment(Comment(
-        None, [
-            ParamAnnotation("array", "json"),
-            ReturnAnnotation(clazz)
-        ]
-    ))
-    s += "\n"
-    s += "public static function {0}($json) {{\n".format(func_name)
+class DeserializingField:
+    def __init__(self, position: int, typ: str, serialized_name: str):
+        self._position = position
+        self._typ = typ
+        self._serialized_name = serialized_name
 
-    args = ""
+    def position(self) -> int:
+        return self._position
+
+    def type(self) -> str:
+        return self._typ
+
+    def serialized_name(self) -> str:
+        return self._serialized_name
+
+    def convert_func(self) -> Optional[str]:
+        return get_php_type_fn(self.type())
+
+
+def generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fields: List[DeserializingField]) -> str:
+    arguments = []
+
+    for _ in range(n):
+        arguments.append('null')
+
     for field in fields:
-        fn = get_php_type_fn(field[0])
-
-        if fn is not None:
-            args += "{0}($json[\"{1}\"]), ".format(fn, field[1])
+        if field.convert_func() is not None:
+            arguments[field.position()] = "{0}($json[\"{1}\"])".format(field.convert_func(), field.serialized_name())
         else:
-            args += "$json[\"{0}\"], ".format(field[1])
+            arguments[field.position()] = "$json[\"{0}\"]".format(field.serialized_name())
 
-    if args[-2:] == ", ":
-        args = args[:-2]
-
-    s += "return new {0}({1});\n".format(clazz, args)
+    s = ""
+    s += generate_comment(Comment(None, [
+        ParamAnnotation("array", "json"),
+        ReturnAnnotation(clazz)
+    ]))
+    s += "\n"
+    s += "public static function {0}($json) {{\n".format(method_name)
+    s += "return new {0}({1});\n".format(clazz, ", ".join(arguments))
     s += "}"
 
     return s
 
 
 def generate_to_array_method(fields: List[Field]) -> str:
-    return generate_simple_serialize_method('toArray', [(x.type(), x.name(), x.name()) for x in fields])
+    return generate_simple_serialize_method('toArray', [
+        SerializingField(x.name(), x.type(), x.name()) for x in fields
+    ])
 
 
 def generate_from_array_method(clazz: str, fields: List[Field]) -> str:
-    return generate_simple_deserialize_method("fromArray", clazz, [(x.type(), x.name()) for x in fields])
+    n = len(fields)
+
+    return generate_simple_deserialize_method("fromArray", clazz, n, [
+        DeserializingField(pos, fields[pos].type(), fields[pos].name()) for pos in range(n)
+    ])
 
 
-def aggregate_groups_from_fields(fields: List[Field]) -> Dict[str, List[Tuple[Group, Field]]]:
-    bucket = {}
+def aggregate_groups_from_fields(fields: List[Field]) -> List[Tuple[int, str, List[Tuple[int, Field, Group]]]]:
+    bucket = {}  # type: Dict[str, Tuple[int, str, List[Tuple[int, Field, Group]]]]
 
-    for field in fields:
+    n = len(fields)
+    for pos in range(n):
+        field = fields[pos]
+
         if field.groups() is not None:
             for group in field.groups():
                 if group.name() not in bucket:
-                    bucket[group.name()] = []
+                    bucket[group.name()] = (n, group.name(), [])
 
-                bucket[group.name()].append((group, field))
+                bucket[group.name()][2].append((pos, field, group))
 
-    return bucket
+    return list(bucket.values())
 
 
-def generate_serializers_by_alias(fields: List[Field]) -> List[str]:
-    ag = aggregate_groups_from_fields(fields)
+def generate_serializers_by_group(fields: List[Field]) -> List[str]:
+    aggregate = aggregate_groups_from_fields(fields)
     methods = []
 
-    for item in ag.items():
-        group_name = item[0]
-        tups = item[1]
+    for item in aggregate:
+        group_name = item[1]
+        fields = item[2]
 
-        func_name = 'to' + group_name[0:1].upper() + group_name[1:]
+        method_name = 'to' + upper_first(group_name)
 
-        methods.append(
-            generate_simple_serialize_method(func_name,
-                                             [(tup[1].type(), tup[1].name(), tup[0].member()) for tup in tups]))
+        methods.append(generate_simple_serialize_method(method_name, [
+            SerializingField(field[1].name(), field[1].type(), field[2].member()) for field in fields
+        ]))
 
     return methods
 
 
-def generate_deserializers_by_alias(clazz: str, fields: List[Field]) -> List[str]:
-    ag = aggregate_groups_from_fields(fields)
+def generate_deserializers_by_group(clazz: str, fields: List[Field]) -> List[str]:
+    aggregate = aggregate_groups_from_fields(fields)
     methods = []
 
-    for item in ag.items():
-        group_name = item[0]
-        tups = item[1]
+    for item in aggregate:
+        n = item[0]
+        group_name = item[1]
+        fields = item[2]
 
-        func_name = 'from' + group_name[0:1].upper() + group_name[1:]
+        method_name = 'from' + upper_first(group_name)
 
-        methods.append(
-            generate_simple_deserialize_method(func_name, clazz, [(tup[1].type(), tup[0].member()) for tup in tups]))
+        methods.append(generate_simple_deserialize_method(method_name, clazz, n, [
+            DeserializingField(field[0], field[1].type(), field[2].member()) for field in fields
+        ]))
 
     return methods
 
@@ -237,7 +278,7 @@ def generate_deserializers_by_alias(clazz: str, fields: List[Field]) -> List[str
 def generate_serializers(spec: Spec) -> str:
     methods = [
         generate_to_array_method(spec.fields()),
-        *generate_serializers_by_alias(spec.fields()),
+        *generate_serializers_by_group(spec.fields()),
     ]
 
     return '\n\n'.join(methods)
@@ -246,7 +287,7 @@ def generate_serializers(spec: Spec) -> str:
 def generate_deserializers(spec: Spec) -> str:
     methods = [
         generate_from_array_method(spec.source().clazz(), spec.fields()),
-        *generate_deserializers_by_alias(spec.source().clazz(), spec.fields()),
+        *generate_deserializers_by_group(spec.source().clazz(), spec.fields()),
     ]
 
     return '\n\n'.join(methods)
