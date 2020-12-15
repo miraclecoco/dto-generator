@@ -229,7 +229,7 @@ def generate_deserializers_by_alias(clazz: str, fields: List[Field]) -> List[str
         func_name = 'from' + group_name[0:1].upper() + group_name[1:]
 
         methods.append(
-            generate_simple_deserialize_method(func_name, clazz, [(tup[1].type(), tup[1].name()) for tup in tups]))
+            generate_simple_deserialize_method(func_name, clazz, [(tup[1].type(), tup[0].member()) for tup in tups]))
 
     return methods
 
