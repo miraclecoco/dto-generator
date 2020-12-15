@@ -15,6 +15,8 @@ def code(s: str) -> str:
 TEMPLATE = code("""
 // THIS FILE IS AUTO GENERATED
 
+/* eslint-disable */
+
 export class {clazz} {{
 {members}
 
