@@ -28,6 +28,25 @@ class VarAnnotation(Annotation):
         return s
 
 
+class ParamAnnotation(Annotation):
+    def __init__(self, typ: str, var: str, desc: str = None) -> None:
+        self._typ = typ
+        self._var = var
+        self._desc = desc
+
+    def name(self) -> str:
+        return "param"
+
+    def value(self) -> str:
+        s = ""
+        s += "{0} ${1}".format(self._typ, self._var)
+
+        if self._desc is not None:
+            s += " " + self._desc
+
+        return s
+
+
 class ReturnAnnotation(Annotation):
     def __init__(self, typ: str) -> None:
         self._typ = typ

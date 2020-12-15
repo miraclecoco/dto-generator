@@ -3,7 +3,7 @@ from colorama import Fore
 
 from internal.spec import Field, Spec
 from internal.gen import Generator
-from internal.lang.php import Comment, VarAnnotation, ReturnAnnotation
+from internal.lang.php import Comment, VarAnnotation, ReturnAnnotation, ParamAnnotation
 
 
 def code(s: str) -> str:
@@ -88,7 +88,7 @@ def generate_constructor(fields: List[Field]) -> str:
     s = ""
     s += generate_comment(Comment(
         None,
-        [VarAnnotation(
+        [ParamAnnotation(
             get_php_type(field.typ()),
             field.name(),
             field.comment()
@@ -115,7 +115,7 @@ def generate_from_json_method(clazz: str, fields: List[Field]) -> str:
     s = ""
     s += generate_comment(Comment(
         None, [
-            VarAnnotation("array", "json"),
+            ParamAnnotation("array", "json"),
             ReturnAnnotation(clazz)
         ]
     ))
