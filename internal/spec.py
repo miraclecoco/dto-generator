@@ -54,11 +54,8 @@ class Field:
         check_key(json, "name")
         check_key(json, "type")
 
-        if "commit" not in json:
+        if "comment" not in json or not json["comment"]:
             json["comment"] = None
-
-        if "aliases" not in json:
-            json["aliases"] = None
 
         if "groups" not in json:
             json["groups"] = None
