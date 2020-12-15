@@ -123,7 +123,7 @@ def generate_constructor(fields: List[Field]) -> str:
     return s
 
 
-def generate_from_json_method(clazz: str, fields: List[Field]) -> str:
+def generate_from_array_method(clazz: str, fields: List[Field]) -> str:
     s = ""
     s += generate_comment(Comment(
         None, [
@@ -132,7 +132,7 @@ def generate_from_json_method(clazz: str, fields: List[Field]) -> str:
         ]
     ))
     s += "\n"
-    s += "public static function fromJson($json) {\n"
+    s += "public static function fromArray($json) {\n"
 
     args = ""
     for field in fields:
@@ -152,7 +152,7 @@ def generate_from_json_method(clazz: str, fields: List[Field]) -> str:
     return s
 
 
-def generate_to_json_method(fields: List[Field]) -> str:
+def generate_to_array_method(fields: List[Field]) -> str:
     s = ""
     s += generate_comment(Comment(
         None, [
@@ -160,7 +160,7 @@ def generate_to_json_method(fields: List[Field]) -> str:
         ]
     ))
     s += "\n"
-    s += "public function toJson() {\n"
+    s += "public function toArray() {\n"
 
     assigns = ""
     for field in fields:
@@ -197,7 +197,7 @@ class PHPGenerator(Generator):
             "clazz": spec.source().clazz(),
             "properties": generate_multi_class_members(spec.fields()),
             "constructor": generate_constructor(spec.fields()),
-            "fromJson": generate_from_json_method(spec.source().clazz(), spec.fields()),
-            "toJson": generate_to_json_method(spec.fields())
+            "fromJson": generate_from_array_method(spec.source().clazz(), spec.fields()),
+            "toJson": generate_to_array_method(spec.fields())
         }
         return TEMPLATE.format(**tpl_args)
