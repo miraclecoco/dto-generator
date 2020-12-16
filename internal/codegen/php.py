@@ -35,7 +35,7 @@ PHP_TYPE = {
     "float": "float",
     "double": "double",
     "boolean": "bool",
-    "datetime": "Date",
+    "datetime": "\\DateTimeImmutable",
     "any": "mixed",
 }
 
