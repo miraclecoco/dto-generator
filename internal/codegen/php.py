@@ -49,7 +49,7 @@ PHP_DESERIALIZE_FN = {
     "float": "floatval({expr})",
     "double": "doubleval({expr})",
     "boolean": "boolval({expr})",
-    "datetime": "\\date_create_immutable({expr})"
+    "datetime": "\\date_create_immutable(date(strtotime({expr}) || {expr}))"
 }
 
 
