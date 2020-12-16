@@ -34,15 +34,21 @@ TS_TYPE = {
     "float": "number",
     "double": "number",
     "boolean": "boolean",
+    "datetime": "Date",
     "any": "any",
 }
 
-TS_CONVERT_FN = {
+TS_SERIALIZE_FN = {
+    "datetime": "{expr}.getSeconds()"
+}
+
+TS_DESERIALIZE_FN = {
     "string": "({expr}).toString()",
     "integer": "parseInt({expr})",
     "float": "parseFloat({expr})",
     "double": "parseFloat({expr})",
     "boolean": "!!({expr})",
+    "datetime": "new Date(parseInt({expr}) * 1000)"
 }
 
 
@@ -50,8 +56,12 @@ def get_ts_type(typ: str) -> 'str':
     return TS_TYPE[typ] if typ in TS_TYPE else typ
 
 
-def get_ts_convert_func(typ: str) -> Optional['str']:
-    return TS_CONVERT_FN[typ] if typ in TS_CONVERT_FN else None
+def get_ts_serialize_func(typ: str) -> Optional['str']:
+    return TS_SERIALIZE_FN[typ] if typ in TS_SERIALIZE_FN else None
+
+
+def get_ts_deserialize_func(typ: str) -> Optional['str']:
+    return TS_DESERIALIZE_FN[typ] if typ in TS_DESERIALIZE_FN else None
 
 
 def generate_comment(comment: Comment) -> str:
@@ -139,7 +149,7 @@ class SerializingField:
         return self._serialized_name
 
     def convert_func(self) -> Optional[str]:
-        return get_ts_convert_func(self.type())
+        return get_ts_serialize_func(self.type())
 
 
 def generate_simple_serialize_method(method_name: str, fields: List[SerializingField]) -> str:
@@ -147,8 +157,14 @@ def generate_simple_serialize_method(method_name: str, fields: List[SerializingF
 
     for field in fields:
         lval = "this.{0}".format(field.name())
+        substituted_lval = lval
 
-        elements.append("\"{0}\": {1}".format(field.serialized_name(), lval))
+        if field.convert_func() is not None:
+            substituted_lval = field.convert_func().format(expr=substituted_lval)
+
+        elements.append("\"{0}\": {1}".format(
+            field.serialized_name(), "{0} === null ? null : {1}".format(lval, substituted_lval)
+        ))
 
     s = ""
     s += "public {0}(): any {{\nreturn {{{1}}};\n}}".format(
@@ -174,7 +190,7 @@ class DeserializingField:
         return self._serialized_name
 
     def convert_func(self) -> Optional[str]:
-        return get_ts_convert_func(self.type())
+        return get_ts_deserialize_func(self.type())
 
 
 def generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fields: List[DeserializingField]) -> str:
@@ -185,12 +201,13 @@ def generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fie
 
     for field in fields:
         lval = 'json["{0}"]'.format(field.serialized_name())
+        substituted_lval = lval
 
         if field.convert_func() is not None:
-            lval = field.convert_func().format(expr=lval)
+            substituted_lval = field.convert_func().format(expr=substituted_lval)
 
         arguments[field.position()] = "{0}.hasOwnProperty('{1}') ? {2} : null".format(
-            'json', field.serialized_name(), lval
+            'json', field.serialized_name(), substituted_lval
         )
 
     s = ""

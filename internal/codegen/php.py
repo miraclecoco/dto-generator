@@ -35,15 +35,21 @@ PHP_TYPE = {
     "float": "float",
     "double": "double",
     "boolean": "bool",
+    "datetime": "Date",
     "any": "mixed",
 }
 
-PHP_CONVERT_FN = {
+PHP_SERIALIZE_FN = {
+    "datetime": "{expr}->getTimestamp()"
+}
+
+PHP_DESERIALIZE_FN = {
     "string": "strval({expr})",
     "integer": "intval({expr})",
     "float": "floatval({expr})",
     "double": "doubleval({expr})",
     "boolean": "boolval({expr})",
+    "datetime": "\\date_create_immutable({expr})"
 }
 
 
@@ -51,8 +57,12 @@ def get_php_type(typ: str) -> str:
     return PHP_TYPE[typ] if typ in PHP_TYPE else typ
 
 
-def get_php_convert_func(typ: str) -> Optional[str]:
-    return PHP_CONVERT_FN[typ] if typ in PHP_CONVERT_FN else None
+def get_php_serialize_func(typ: str) -> Optional[str]:
+    return PHP_SERIALIZE_FN[typ] if typ in PHP_SERIALIZE_FN else None
+
+
+def get_php_deserialize_func(typ: str) -> Optional[str]:
+    return PHP_DESERIALIZE_FN[typ] if typ in PHP_DESERIALIZE_FN else None
 
 
 def generate_comment(comment: Comment) -> str:
@@ -141,16 +151,22 @@ class SerializingField:
         return self._serialized_name
 
     def convert_func(self) -> Optional[str]:
-        return get_php_convert_func(self.type())
+        return get_php_serialize_func(self.type())
 
 
 def generate_simple_serialize_method(method_name: str, fields: List[SerializingField]) -> str:
     elements = []
 
     for field in fields:
-        lval = "$this->{0}".format(field.name())
+        lval = '$this->{0}'.format(field.serialized_name())
+        substituted_lval = lval
 
-        elements.append('"{0}" => {1}'.format(field.serialized_name(), lval))
+        if field.convert_func() is not None:
+            substituted_lval = field.convert_func().format(expr=substituted_lval)
+
+        elements.append('"{0}" => {1}'.format(
+            field.serialized_name(), "is_null({0}) ? null : {1}".format(lval, substituted_lval)
+        ))
 
     comment = Comment(None, [
         ReturnAnnotation("array")
@@ -185,7 +201,7 @@ class DeserializingField:
         return self._serialized_name
 
     def convert_func(self) -> Optional[str]:
-        return get_php_convert_func(self.type())
+        return get_php_deserialize_func(self.type())
 
 
 def generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fields: List[DeserializingField]) -> str:
@@ -196,13 +212,12 @@ def generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fie
 
     for field in fields:
         lval = '$json["{0}"]'.format(field.serialized_name())
+        substituted_lval = lval
 
         if field.convert_func() is not None:
-            lval = field.convert_func().format(expr=lval)
+            substituted_lval = field.convert_func().format(expr=substituted_lval)
 
-        arguments[field.position()] = "isset({0}) ? {1} : null".format(
-            '$json["{0}"]'.format(field.serialized_name()), lval
-        )
+        arguments[field.position()] = "isset({0}) ? {1} : null".format(lval, substituted_lval)
 
     comment = Comment(None, [
         ParamAnnotation("array", "json"),
