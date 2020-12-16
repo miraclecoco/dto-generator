@@ -158,7 +158,7 @@ def generate_simple_serialize_method(method_name: str, fields: List[SerializingF
     elements = []
 
     for field in fields:
-        lval = '$this->{0}'.format(field.serialized_name())
+        lval = '$this->{0}'.format(field.name())
         substituted_lval = lval
 
         if field.convert_func() is not None:
