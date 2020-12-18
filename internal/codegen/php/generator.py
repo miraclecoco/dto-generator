@@ -1,19 +1,20 @@
 from typing import List, Optional, IO
 from colorama import Fore
 
+from internal.codegen.php.convension import AccessModifier
 from internal.spec import Field, Spec, aggregate_groups_from_fields
 from internal.codegen import Generator
 from internal.util import upper_first
 from internal.lang.php import Comment, VarAnnotation, ReturnAnnotation, ParamAnnotation
-from internal.codegen.php.ast import Type
+from internal.codegen.php.ast import Type, Identifier
 from internal.codegen.php.expr import SourceFile
-from internal.codegen.php.element import AccessModifier, StaticModifier, VariableDeclaration, FunctionDeclaration, \
-    ArgumentDeclarationList, ArgumentDeclaration, ParameterList
+from internal.codegen.php.element import VariableDeclaration, FunctionDeclaration, \
+    ArgumentListDeclaration, ArgumentDeclaration, ParameterList
 from internal.codegen.php.extension import DocComment, Annotation
 from internal.codegen.php.grammer import ClassDeclaration, MemberDeclaration, MethodDeclaration, \
     UnaryAssignmentStatement, \
-    AccessThisStatement, Scope, AnyEvaluation, \
-    AccessStatement, NamespaceDeclaration, InvocationStatement, NamedCallableReference
+    ThisAccessor, Scope, AnyEvaluation, \
+    Accessor, NamespaceDeclaration, InvocationStatement, NamedCallableReference, MethodBody
 
 
 def code(s: str) -> str:
@@ -329,41 +330,26 @@ class PHPGenerator(Generator):
     def generate(self, spec: Spec, fp: IO) -> None:
         file = SourceFile([
             NamespaceDeclaration("CodelyTV\\Think\\Foo\\Bar"),
-            ClassDeclaration("MyClass", [
-                DocComment("123", [
-                    Annotation.var("integer", "")
-                ]),
-                MemberDeclaration(
-                    [AccessModifier.public(), StaticModifier()],
-                    VariableDeclaration("myProperty1", Type.string())
-                ),
-                MemberDeclaration(
-                    [AccessModifier.public(), StaticModifier()],
-                    VariableDeclaration("myProperty2", Type.instance("Date"))
-                ),
-                MemberDeclaration(
-                    [AccessModifier.public(), StaticModifier()],
-                    VariableDeclaration("myProperty3", Type.null())
-                ),
-                MemberDeclaration(
-                    [AccessModifier.public(), StaticModifier()],
-                    VariableDeclaration("myProperty3", Type.undefined())
-                ),
+            ClassDeclaration(Identifier("MyClass"), [
+                MemberDeclaration(Identifier("myProperty1"), Type.string(), AccessModifier.public(), False),
+                MemberDeclaration(Identifier("myProperty2"), Type.string(), AccessModifier.public(), False),
+                MemberDeclaration(Identifier("myProperty3"), Type.string(), AccessModifier.public(), False),
+                MemberDeclaration(Identifier("myProperty4"), Type.string(), AccessModifier.public(), False),
                 MethodDeclaration(
-                    [AccessModifier.public()],
-                    FunctionDeclaration("myMethod1", Type.instance("Date"), ArgumentDeclarationList([
-                        ArgumentDeclaration("arg1", Type.string()),
-                        ArgumentDeclaration("arg2", Type.boolean()),
-                        ArgumentDeclaration("arg3", Type.instance("Date")),
-                    ])),
-                    [
+                    Identifier("myMethod1"), Type.string(), AccessModifier.public(), False,
+                    ArgumentListDeclaration([
+                        ArgumentDeclaration(Identifier("arg1"), Type.string()),
+                        ArgumentDeclaration(Identifier("arg2"), Type.string()),
+                        ArgumentDeclaration(Identifier("arg3"), Type.string())
+                    ]),
+                    MethodBody([
                         UnaryAssignmentStatement(
-                            AccessStatement.series([
-                                AccessThisStatement(Scope(Type.instance("MyClass"))),
-                                AccessStatement("foo", Type.instance("Foo")),
-                                AccessStatement("bar", Type.instance("Bar")),
-                                AccessStatement("baz", Type.instance("Baz")),
-                                AccessStatement("val", Type.string()),
+                            Accessor.series([
+                                ThisAccessor(Scope(Type.instance("MyClass"))),
+                                Accessor("foo", Type.instance("Foo")),
+                                Accessor("bar", Type.instance("Bar")),
+                                Accessor("baz", Type.instance("Baz")),
+                                Accessor("val", Type.string()),
                             ]),
                             AnyEvaluation("123", Type.number())
                         ),
@@ -376,8 +362,7 @@ class PHPGenerator(Generator):
                                 AnyEvaluation("foo()", Type.any()),
                             ])
                         )
-                    ]
-                )
+                    ])),
             ])
         ])
         print(file.print())

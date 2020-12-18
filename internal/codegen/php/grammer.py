@@ -1,186 +1,216 @@
-from typing import List
+from abc import ABC, abstractmethod
+from typing import List, TypeVar, Generic
 
-from internal.codegen.common.printer import Printer, PrinterFactory
+from internal.codegen.common.printer import PassThroughPrinter
+from internal.codegen.php.convension import AccessModifier, UnaryOperator
+from internal.codegen.php.printer.common import BasePrinter, Printer, PrinterFactory
 from internal.codegen.php.ast import Identifier, Type, StatementBlock, LeftValue, RightValue, Evaluation, Reference, \
-    CallableReference
-from internal.codegen.php.element import VariableDeclaration, FunctionDeclaration, Modifier, ParameterList
-from internal.codegen.php.util import StatementBlockCollection, ModifierList
+    Callable, Node, LogicalComponent
+from internal.codegen.php.element import ParameterList, ArgumentListDeclaration
+from internal.codegen.php.util import StatementBlockCollection
+
+T = TypeVar('T')
 
 
-class NamespaceDeclaration(StatementBlock):
+class NamespaceDeclaration(StatementBlock['NamespaceDeclaration']):
     def __init__(self, name: str):
+        super().__init__()
+
         self._name = name
 
     def name(self) -> str:
         return self._name
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import NamespacePrinter
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import NamespacePrinter
 
         return NamespacePrinter(self, parent)
 
 
-class UseStatement(StatementBlock):
+class UseStatement(StatementBlock['UseStatement']):
     def __init__(self, qualified_name: str):
+        super().__init__()
+
         self._qualified_name = qualified_name
 
     def qualified_name(self) -> str:
         return self._qualified_name
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import UsePrinter
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import UsePrinter
 
         return UsePrinter(self, parent)
 
 
-class CommentStatement(StatementBlock):
-    def create_printer(self, parent: Printer) -> Printer:
-        raise NotImplementedError()
-
-
-class SingleLineCommentStatement(CommentStatement):
+class SingleLineCommentStatement(StatementBlock['SingleLineCommentStatement']):
     def __init__(self, content: str):
+        super().__init__()
+
         self._content = content
 
     def content(self) -> str:
         return self._content
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import SingleLineCommentPrinter
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import SingleLineCommentPrinter
 
         return SingleLineCommentPrinter(self, parent)
 
 
-class MultiLineCommentStatement(CommentStatement):
+class MultiLineCommentStatement(StatementBlock['MultiLineCommentStatement']):
     def __init__(self, lines: List[str]):
+        super().__init__()
+
         self._content = lines
 
     def lines(self) -> List[str]:
         return self._content
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import MultiLineCommentPrinter
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import MultiLineCommentPrinter
 
         return MultiLineCommentPrinter(self, parent)
 
 
-class ClassDeclaration(StatementBlock):
-    def __init__(self, name: str, statement_blocks: List[StatementBlock]):
-        self._identifier = Identifier(name)
-        self._statement_blocks = StatementBlockCollection(statement_blocks)
+class ClassDeclaration(StatementBlock['ClassDeclaration']):
+    def __init__(self, identifier: Identifier, fields: List['StatementBlock']):
+        super().__init__(fields)
+
+        self._identifier = identifier
+        self._fields = StatementBlockCollection(fields)
+
+    def identifier(self) -> Identifier:
+        return self._identifier
+
+    def fields(self) -> StatementBlockCollection:
+        return self._fields
+
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import ClassDeclarationPrinter
+
+        return ClassDeclarationPrinter(self, parent, [self.fields()])
+
+
+class ClassField(StatementBlock[T], Generic[T], ABC):
+    @abstractmethod
+    def access_modifier(self) -> AccessModifier:
+        pass
+
+    @abstractmethod
+    def is_static(self) -> bool:
+        pass
+
+    def is_public(self) -> bool:
+        return self.access_modifier().is_public()
+
+    def is_protected(self) -> bool:
+        return self.access_modifier().is_protected()
+
+    def is_private(self) -> bool:
+        return self.access_modifier().is_private()
+
+
+class MemberDeclaration(ClassField['MethodDeclaration']):
+    def __init__(self, identifier: Identifier, typ: Type, access_modifier: AccessModifier, static: bool):
+        super().__init__()
+
+        self._identifier = identifier
+        self._type = typ
+        self._access_modifier = access_modifier
+        self._static = static
 
     def identifier(self) -> Identifier:
         return self._identifier
 
     def type(self) -> Type:
-        return Type(self.identifier().represent())
+        return self._type
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import ClassPrinter
+    def access_modifier(self) -> AccessModifier:
+        return self._access_modifier
 
-        return ClassPrinter(self, parent, [self._statement_blocks])
+    def is_static(self) -> bool:
+        return self._static
 
+    def is_logical(self) -> bool:
+        return False
 
-class MemberDeclaration(StatementBlock):
-    def __init__(self, modifiers: List[Modifier], variable: VariableDeclaration):
-        self._modifiers = ModifierList(modifiers)
-        self._variable = variable
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import MemberDeclarationPrinter
 
-    def modifiers(self) -> ModifierList:
-        return self._modifiers
-
-    def variable(self) -> VariableDeclaration:
-        return self._variable
-
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import MemberPrinter
-
-        return MemberPrinter(self, parent, [
-            self.modifiers(), self.variable().identifier()
-        ])
+        return MemberDeclarationPrinter(self, parent)
 
 
-class MethodDeclaration(StatementBlock):
-    def __init__(self, modifiers: List[Modifier], function: FunctionDeclaration,
-                 statement_blocks: List[StatementBlock]):
-        self._modifiers = ModifierList(modifiers)
-        self._function = function
+class MethodBody(LogicalComponent['MethodBody'], PrinterFactory):
+    def __init__(self, statement_blocks: List[StatementBlock]):
+        super().__init__(statement_blocks)
+
         self._statement_blocks = StatementBlockCollection(statement_blocks)
-
-    def modifiers(self) -> ModifierList:
-        return self._modifiers
-
-    def function(self) -> FunctionDeclaration:
-        return self._function
 
     def statement_blocks(self) -> StatementBlockCollection:
         return self._statement_blocks
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import MethodPrinter
-
-        decl = self.function()
-
-        return MethodPrinter(self, parent, [
-            self.modifiers(), decl.identifier(), decl.argument_list(), self.statement_blocks()
-        ])
+    def create_printer(self, parent: BasePrinter) -> BasePrinter:
+        return PassThroughPrinter(parent, [self.statement_blocks()])
 
 
-class UnaryOperator(PrinterFactory):
-    def __init__(self, represent: str, typ: Type):
-        self._represent = represent
-        self._type = typ
+class MethodDeclaration(ClassField['MethodDeclaration']):
+    def __init__(self, identifier: Identifier, return_type: Type, access_modifier: AccessModifier, static: bool,
+                 argument_list: ArgumentListDeclaration, body: MethodBody):
+        super().__init__([body])
 
-    @staticmethod
-    def triple_equal():
-        return UnaryOperator("===", Type.boolean())
+        self._identifier = identifier
+        self._return_type = return_type
+        self._access_modifier = access_modifier
+        self._static = static
+        self._argument_list = argument_list
+        self._body = body
 
-    @staticmethod
-    def double_equal():
-        return UnaryOperator("==", Type.boolean())
+    def identifier(self) -> Identifier:
+        return self._identifier
 
-    @staticmethod
-    def great_than():
-        return UnaryOperator(">", Type.boolean())
+    def return_type(self) -> Type:
+        return self._return_type
 
-    @staticmethod
-    def great_than_or_equal():
-        return UnaryOperator(">=", Type.boolean())
+    def access_modifier(self) -> AccessModifier:
+        return self._access_modifier
 
-    @staticmethod
-    def less_than():
-        return UnaryOperator("<", Type.boolean())
+    def is_static(self) -> bool:
+        return self._static
 
-    @staticmethod
-    def less_than_or_equal():
-        return UnaryOperator("<=", Type.boolean())
+    def argument_list(self) -> ArgumentListDeclaration:
+        return self._argument_list
 
-    @staticmethod
-    def not_triple_equal():
-        return UnaryOperator("!==", Type.boolean())
+    def body(self) -> MethodBody:
+        return self._body
 
-    @staticmethod
-    def not_double_equal():
-        return UnaryOperator("!=", Type.boolean())
+    def is_logical(self) -> bool:
+        return False
 
-    @staticmethod
-    def instanceof():
-        return UnaryOperator("instanceof", Type.boolean())
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import MethodPrinter
 
-    def represent(self) -> str:
-        return self._represent
-
-    def type(self) -> Type:
-        return self._type
-
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import UnaryOperatorPrinter
-
-        return UnaryOperatorPrinter(self, parent)
+        return MethodPrinter(self, parent, [self.argument_list(), self.body()])
 
 
-class UnaryEvaluation(Evaluation):
+class UnaryEvaluation(Evaluation['UnaryEvaluation']):
     def __init__(self, operator: UnaryOperator, left: Evaluation, right: Evaluation):
+        super().__init__([operator, left, right])
+
         self._operator = operator
         self._left = left
         self._right = right
@@ -197,16 +227,21 @@ class UnaryEvaluation(Evaluation):
     def type(self) -> Type:
         return self.operator().type()
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import UnaryEvaluationPrinter
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import UnaryEvaluationPrinter
 
         return UnaryEvaluationPrinter(self, parent, [
             self.left(), self.operator(), self.right()
         ])
 
 
-class UnaryAssignmentStatement(StatementBlock):
+class UnaryAssignmentStatement(StatementBlock['UnaryAssignmentStatement']):
     def __init__(self, left: LeftValue, right: RightValue):
+        super().__init__([left, right])
+
         self._left = left
         self._right = right
 
@@ -219,16 +254,21 @@ class UnaryAssignmentStatement(StatementBlock):
     def type(self) -> Type:
         return self.right().type()
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import UnaryAssignmentPrinter
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import UnaryAssignmentPrinter
 
         return UnaryAssignmentPrinter(self, parent, [
             self.left(), self.right()
         ])
 
 
-class AnyEvaluation(Evaluation):
+class AnyEvaluation(Evaluation['AnyEvaluation']):
     def __init__(self, expression: str, typ: Type):
+        super().__init__()
+
         self._expression = expression
         self._type = typ
 
@@ -238,20 +278,25 @@ class AnyEvaluation(Evaluation):
     def type(self) -> Type:
         return self._type
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import AnyEvaluationPrinter
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import AnyEvaluationPrinter
 
         return AnyEvaluationPrinter(self, parent)
 
 
-class AccessStatement(Reference):
-    def __init__(self, name: str, typ: Type, parent: 'AccessStatement' = None):
+class Accessor(Reference['Accessor']):
+    def __init__(self, name: str, typ: Type, parent: 'Accessor' = None):
+        super().__init__()
+
         self._name = name
         self._type = typ
         self._parent = parent
 
     @staticmethod
-    def series(accessors: List['AccessStatement']) -> 'AccessStatement':
+    def series(accessors: List['Accessor']) -> 'Accessor':
         if len(accessors) == 0:
             raise ValueError("'accessors' could not be empty")
 
@@ -273,16 +318,19 @@ class AccessStatement(Reference):
     def type(self) -> Type:
         return self._type
 
-    def parent(self) -> 'AccessStatement':
+    def parent(self) -> 'Accessor':
         return self._parent
 
-    def set_parent(self, parent: 'AccessStatement') -> None:
+    def set_parent(self, parent: 'Accessor') -> None:
         self._parent = parent
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import AccessStatementPrinter
+    def is_logical(self) -> bool:
+        return False
 
-        return AccessStatementPrinter(self, parent)
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import AccessorPrinter
+
+        return AccessorPrinter(self, parent)
 
 
 class Scope:
@@ -293,7 +341,7 @@ class Scope:
         return self._type
 
 
-class AccessThisStatement(AccessStatement):
+class ThisAccessor(Accessor):
     def __init__(self, scope: Scope):
         super().__init__("$this", scope.type())
 
@@ -303,39 +351,51 @@ class AccessThisStatement(AccessStatement):
         return self._scope
 
 
-class Return(StatementBlock):
+class ReturnStatement(StatementBlock['ReturnStatement']):
     def __init__(self, evaluation: Evaluation):
+        super().__init__([evaluation])
+
         self._evaluation = evaluation
 
     def evaluation(self) -> Evaluation:
         return self._evaluation
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import ReturnPrinter
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import ReturnPrinter
 
         return ReturnPrinter(self, parent, [self.evaluation()])
 
 
-class NamedCallableReference(CallableReference):
+class NamedCallableReference(Callable['NamedCallableReference']):
     def __init__(self, name: str):
+        super().__init__()
+
         self._name = name
 
     def name(self) -> str:
         return self._name
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import NamedCallableReferencePrinter
+    def is_logical(self) -> bool:
+        return True
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import NamedCallableReferencePrinter
 
         return NamedCallableReferencePrinter(self, parent)
 
 
-class InvocationStatement(Evaluation):
-    def __init__(self, call: CallableReference, typ: Type, parameters: ParameterList):
+class InvocationStatement(Evaluation['InvocationStatement']):
+    def __init__(self, call: Callable, typ: Type, parameters: ParameterList):
+        super().__init__()
+
         self._callable = call
         self._type = typ
         self._parameters = parameters
 
-    def callable(self) -> CallableReference:
+    def callable(self) -> Callable:
         return self._callable
 
     def type(self) -> Type:
@@ -344,7 +404,20 @@ class InvocationStatement(Evaluation):
     def parameters(self) -> ParameterList:
         return self._parameters
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import InvocationPrinter
+    def is_logical(self) -> bool:
+        return False
 
-        return InvocationPrinter(self, parent, [self.callable(), self.type(), self.parameters()])
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import InvocationPrinter
+
+        return InvocationPrinter(self, parent, [self.callable(), self.parameters()])
+
+
+class BlankLineStatement(StatementBlock['BlankLineStatement']):
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import BlankLinePrinter
+
+        return BlankLinePrinter(self, parent)

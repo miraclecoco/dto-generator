@@ -1,5 +1,8 @@
-from copy import copy
 from typing import List, Callable, Optional
+from abc import ABC, abstractmethod
+from copy import copy
+
+from internal.codegen.common.util import ListCollection
 
 
 class IndentStyle:
@@ -48,13 +51,14 @@ class PrinterConfig:
         return PrinterConfig(self._indent)
 
 
-class Printer:
+class Printer(ABC):
     def __init__(self, parent: 'Printer' = None, children: List['PrinterFactory'] = None):
         if children is None:
             children = []
 
         self._parent = parent
         self._children = children
+        self._children_cache = None
 
     def parent(self) -> Optional['Printer']:
         return self._parent
@@ -62,8 +66,15 @@ class Printer:
     def children(self) -> List['Printer']:
         return self._resolve_children()
 
+    def match_child(self, fn: Callable[['Printer'], bool]) -> Optional['Printer']:
+        return ListCollection(self.children()).single(fn)
+
+    def match_children(self, fn: Callable[['Printer'], bool]) -> List['Printer']:
+        return ListCollection(self.children()).filter(fn).elements()
+
+    @abstractmethod
     def do_print(self, context: 'PrintContext') -> str:
-        raise NotImplementedError()
+        pass
 
     def print(self, context: 'PrintContext') -> str:
         context.set_printer(self)
@@ -79,14 +90,18 @@ class Printer:
         return result
 
     def _resolve_children(self) -> List['Printer']:
-        return [factory.create_printer(self) for factory in self._children]
+        if self._children_cache is None:
+            self._children_cache = [factory.create_printer(self) for factory in self._children]
+
+        return self._children_cache
 
 
-class PrinterFactory:
+class PrinterFactory(ABC):
     #
     # this method will be executed in parent printer in common
+    @abstractmethod
     def create_printer(self, parent: Printer) -> Printer:
-        raise NotImplementedError()
+        pass
 
 
 class PrinterMiddleware:
@@ -244,3 +259,24 @@ class HighOrderPrinter(Printer):
 
     def do_print(self, context: PrintContext) -> str:
         return self._print_fn(self, context)
+
+
+class PassThroughPrinter(Printer):
+    def do_print(self, context: PrintContext) -> str:
+        if len(self.children()) > 1:
+            raise ValueError('expect 1 child, but {0} children is given', len(self.children()))
+
+        return self.children()[0].print(context.create_child())
+
+
+class PassThroughManyPrinter(Printer):
+    def __init__(self, print_fn: Callable[[List[str]], str], parent: Printer = None,
+                 children: List[PrinterFactory] = None):
+        super().__init__(parent, children)
+
+        self._print_fn = print_fn
+
+    def do_print(self, context: PrintContext) -> str:
+        contents = [printer.print(context.create_child()) for printer in self.children()]
+
+        return self._print_fn(contents)

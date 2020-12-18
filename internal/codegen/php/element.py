@@ -1,11 +1,14 @@
 from typing import List
 
-from internal.codegen.common.printer import Printer, PrinterFactory, PrintContext
-from internal.codegen.php.ast import Identifier, Type, Evaluation
+from internal.codegen.common.printer import PrinterFactory, PassThroughPrinter
+from internal.codegen.php.ast import Node, Identifier, Type, Evaluation
+from internal.codegen.php.printer.common import BasePrinter, Printer
 
 
-class VariableDeclaration:
+class VariableDeclaration(Node['VariableDeclaration']):
     def __init__(self, name: str, typ: Type):
+        super().__init__()
+
         self._identifier = Identifier(name)
         self._typ = typ
 
@@ -15,10 +18,15 @@ class VariableDeclaration:
     def type(self) -> Type:
         return self._typ
 
+    def is_logical(self) -> bool:
+        return True
 
-class ArgumentDeclaration(PrinterFactory):
-    def __init__(self, name: str, typ: Type):
-        self._identifier = Identifier(name)
+
+class ArgumentDeclaration(Node['ArgumentDeclaration'], PrinterFactory):
+    def __init__(self, identifier: Identifier, typ: Type):
+        super().__init__()
+
+        self._identifier = identifier
         self._type = typ
 
     def identifier(self) -> Identifier:
@@ -27,19 +35,24 @@ class ArgumentDeclaration(PrinterFactory):
     def type(self) -> Type:
         return self._type
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import ArgumentDeclarationPrinter
+    def is_logical(self) -> bool:
+        return True
 
-        return ArgumentDeclarationPrinter(self, parent, [self.identifier()])
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import ArgumentDeclarationPrinter
+
+        return ArgumentDeclarationPrinter(self, parent)
 
 
-class ArgumentDeclarationList(PrinterFactory):
+class ArgumentListDeclaration(Node['ArgumentDeclarationList'], PrinterFactory):
     def __init__(self, arguments: List[ArgumentDeclaration]):
+        super().__init__(arguments)
+
         self._arguments = arguments
 
     @staticmethod
     def empty():
-        return ArgumentDeclarationList([])
+        return ArgumentListDeclaration([])
 
     def arguments(self) -> List[ArgumentDeclaration]:
         return self._arguments
@@ -47,15 +60,20 @@ class ArgumentDeclarationList(PrinterFactory):
     def length(self) -> int:
         return len(self._arguments)
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import ArgumentDeclarationListPrinter
+    def is_logical(self) -> bool:
+        return True
 
-        return ArgumentDeclarationListPrinter(self, parent, self.arguments())
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import ArgumentListDeclarationPrinter
+
+        return ArgumentListDeclarationPrinter(self, parent, self.arguments())
 
 
-class FunctionDeclaration:
-    def __init__(self, name: str, return_type: Type, argument_list: ArgumentDeclarationList):
-        self._identifier = Identifier(name)
+class FunctionDeclaration(Node['FunctionDeclaration']):
+    def __init__(self, identifier: Identifier, return_type: Type, argument_list: ArgumentListDeclaration):
+        super().__init__()
+
+        self._identifier = identifier
         self._return_type = return_type
         self._argument_list = argument_list
 
@@ -65,12 +83,17 @@ class FunctionDeclaration:
     def return_type(self) -> Type:
         return self._return_type
 
-    def argument_list(self) -> ArgumentDeclarationList:
+    def argument_list(self) -> ArgumentListDeclaration:
         return self._argument_list
 
+    def is_logical(self) -> bool:
+        return True
 
-class Parameter(PrinterFactory):
+
+class Parameter(Node['Parameter'], PrinterFactory):
     def __init__(self, index: int, evaluation: Evaluation):
+        super().__init__([evaluation])
+
         self._index = index
         self._evaluation = evaluation
 
@@ -80,60 +103,26 @@ class Parameter(PrinterFactory):
     def evaluation(self) -> Evaluation:
         return self._evaluation
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import ParameterPrinter
+    def is_logical(self) -> bool:
+        return True
 
-        return ParameterPrinter(self, parent, [self.evaluation()])
+    def create_printer(self, parent: BasePrinter) -> BasePrinter:
+        return PassThroughPrinter(parent, [self.evaluation()])
 
 
-class ParameterList(PrinterFactory):
+class ParameterList(Node['ParameterList'], PrinterFactory):
     def __init__(self, parameters: List[Evaluation]):
+        super().__init__(parameters)
+
         self._parameters = [Parameter(index, parameters[index]) for index in range(len(parameters))]
 
     def parameters(self) -> List[Parameter]:
         return self._parameters
 
-    def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import ParameterListPrinter
+    def is_logical(self) -> bool:
+        return True
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import ParameterListPrinter
 
         return ParameterListPrinter(self, parent, self.parameters())
-
-
-class Modifier(PrinterFactory):
-    def __init__(self, represent: str):
-        self._represent = represent
-
-    def represent(self) -> 'str':
-        return self._represent
-
-    def create_printer(self, parent: Printer) -> Printer:
-        return ModifierPrinter(self, parent)
-
-
-class ModifierPrinter(Printer):
-    def __init__(self, node: Modifier, parent: Printer = None, children: List[PrinterFactory] = None):
-        super().__init__(parent, children)
-
-        self._node = node
-
-    def do_print(self, context: PrintContext) -> str:
-        return self._node.represent()
-
-
-class AccessModifier(Modifier):
-    @staticmethod
-    def public() -> 'AccessModifier':
-        return AccessModifier("public")
-
-    @staticmethod
-    def protected() -> 'AccessModifier':
-        return AccessModifier("protected")
-
-    @staticmethod
-    def private() -> 'AccessModifier':
-        return AccessModifier("private")
-
-
-class StaticModifier(Modifier):
-    def __init__(self):
-        super().__init__("static")

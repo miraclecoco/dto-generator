@@ -1,71 +1,46 @@
-from typing import List, TypeVar, Generic
+from typing import TypeVar
 
-from internal.codegen.common.printer import Printer, PrinterFactory, PrintContext
-from internal.codegen.php.ast import Identifier, Type, BlankLine
-from internal.codegen.php.element import ArgumentDeclaration, ArgumentDeclarationList, ParameterList, Parameter
+from internal.codegen.common.printer import PrintContext
+from internal.codegen.php.element import ArgumentDeclaration, ArgumentListDeclaration, ParameterList, Parameter
 from internal.codegen.php.grammer import SingleLineCommentStatement, MultiLineCommentStatement, ClassDeclaration, \
-    MemberDeclaration, MethodDeclaration, UnaryOperator, UnaryEvaluation, UnaryAssignmentStatement, AnyEvaluation, \
-    AccessStatement, UseStatement, NamespaceDeclaration, Return, InvocationStatement, NamedCallableReference
+    MemberDeclaration, MethodDeclaration, UnaryEvaluation, UnaryAssignmentStatement, AnyEvaluation, Accessor, \
+    UseStatement, NamespaceDeclaration, ReturnStatement, InvocationStatement, NamedCallableReference, \
+    BlankLineStatement, MethodBody
+from internal.codegen.php.printer.common import Printer
 
 T = TypeVar('T')
 
 
-class NodePrinter(Generic[T], Printer):
-    def __init__(self, node: T, parent: Printer = None, children: List[PrinterFactory] = None):
-        super().__init__(parent, children)
-
-        self._node = node
-
-    def node(self) -> T:
-        return self._node
-
+class ArgumentDeclarationPrinter(Printer[ArgumentDeclaration]):
     def do_print(self, context: PrintContext) -> str:
-        raise NotImplementedError()
+        identifier = self.node().identifier().represent()
+
+        return "${0}".format(identifier)
 
 
-class IdentifierPrinter(NodePrinter[Identifier]):
-    def do_print(self, context: PrintContext) -> str:
-        return self.node().represent()
-
-
-class TypePrinter(NodePrinter[Type]):
-    def do_print(self, context: PrintContext) -> str:
-        return self.node().represent()
-
-
-class BlankLinePrinter(NodePrinter[BlankLine]):
-    def do_print(self, context: PrintContext) -> str:
-        return "\n"
-
-
-class ArgumentDeclarationPrinter(NodePrinter[ArgumentDeclaration]):
+class ArgumentListDeclarationPrinter(Printer[ArgumentListDeclaration]):
     def do_print(self, context: PrintContext) -> str:
         components = [printer.print(context.create_child()) for printer in self.children()]
-        return "${0}".format(*components)
 
-
-class ArgumentDeclarationListPrinter(NodePrinter[ArgumentDeclarationList]):
-    def do_print(self, context: PrintContext) -> str:
-        components = [printer.print(context.create_child()) for printer in self.children()]
         return ", ".join(components)
 
 
-class NamespacePrinter(NodePrinter[NamespaceDeclaration]):
+class NamespacePrinter(Printer[NamespaceDeclaration]):
     def do_print(self, context: PrintContext) -> str:
         return "namespace {0};".format(self.node().name())
 
 
-class UsePrinter(NodePrinter[UseStatement]):
+class UsePrinter(Printer[UseStatement]):
     def do_print(self, context: PrintContext) -> str:
         return "use {0};".format(self.node().qualified_name())
 
 
-class SingleLineCommentPrinter(NodePrinter[SingleLineCommentStatement]):
+class SingleLineCommentPrinter(Printer[SingleLineCommentStatement]):
     def do_print(self, context: PrintContext) -> str:
         return "// {0}".format(self.node().content())
 
 
-class MultiLineCommentPrinter(NodePrinter[MultiLineCommentStatement]):
+class MultiLineCommentPrinter(Printer[MultiLineCommentStatement]):
     def do_print(self, context: PrintContext) -> str:
         s = ""
         s += "/**\n"
@@ -74,7 +49,7 @@ class MultiLineCommentPrinter(NodePrinter[MultiLineCommentStatement]):
         return s
 
 
-class ClassPrinter(NodePrinter[ClassDeclaration]):
+class ClassDeclarationPrinter(Printer[ClassDeclaration]):
     def do_print(self, context: PrintContext) -> str:
         def configure(ctx: PrintContext):
             ctx.state().set_indent_size(1)
@@ -84,45 +59,57 @@ class ClassPrinter(NodePrinter[ClassDeclaration]):
         ])
 
 
-class MemberPrinter(NodePrinter[MemberDeclaration]):
+class MemberDeclarationPrinter(Printer[MemberDeclaration]):
     def do_print(self, context: PrintContext) -> str:
-        return "{0} ${1};".format(*[
-            printer.print(context.create_child()) for printer in self.children()
-        ])
+        access_modifier = self.node().access_modifier().represent()
+        static_modifier = " static" if self.node().is_static() else ""
+        identifier = self.node().identifier().represent()
+
+        return "{0}{1} ${2};".format(
+            access_modifier, static_modifier, identifier
+        )
 
 
-class MethodPrinter(NodePrinter[MethodDeclaration]):
+class MethodBodyPrinter(Printer[MethodBody]):
     def do_print(self, context: PrintContext) -> str:
-        return "{0} function {1}({2}) {{\n{3}\n}}".format(*[
-            printer.print(context.create_child()) for printer in self.children()
-        ])
+        block_printer = self.children()[0]
+
+        return block_printer.print(context.create_child())
 
 
-class UnaryOperatorPrinter(NodePrinter[UnaryOperator]):
+class MethodPrinter(Printer[MethodDeclaration]):
     def do_print(self, context: PrintContext) -> str:
-        return self.node().represent()
+        access_modifier = self.node().access_modifier().represent()
+        static_modifier = " static" if self.node().is_static() else ""
+        identifier = self.node().identifier().represent()
+        argument_list = self.children()[0].print(context.create_child())
+        body = self.children()[1].print(context.create_child())
+
+        return "{0}{1} function {2}({3}) {{\n{4}\n}}".format(
+            access_modifier, static_modifier, identifier, argument_list, body
+        )
 
 
-class UnaryEvaluationPrinter(NodePrinter[UnaryEvaluation]):
+class UnaryEvaluationPrinter(Printer[UnaryEvaluation]):
     def do_print(self, context: PrintContext) -> str:
         return "{0} {1} {2}".format(*[
             printer.print(context.create_child()) for printer in self.children()
         ])
 
 
-class UnaryAssignmentPrinter(NodePrinter[UnaryAssignmentStatement]):
+class UnaryAssignmentPrinter(Printer[UnaryAssignmentStatement]):
     def do_print(self, context: PrintContext) -> str:
         return "{0} = {1};".format(*[
             printer.print(context.create_child()) for printer in self.children()
         ])
 
 
-class AnyEvaluationPrinter(NodePrinter[AnyEvaluation]):
+class AnyEvaluationPrinter(Printer[AnyEvaluation]):
     def do_print(self, context: PrintContext) -> str:
         return self.node().expression()
 
 
-class AccessStatementPrinter(NodePrinter[AccessStatement]):
+class AccessorPrinter(Printer[Accessor]):
     def do_print(self, context: PrintContext) -> str:
         current = self.node()
         accessors = []
@@ -134,34 +121,40 @@ class AccessStatementPrinter(NodePrinter[AccessStatement]):
         return '->'.join([accessor.name() for accessor in accessors[::-1]])
 
 
-class ReturnPrinter(NodePrinter[Return]):
+class ReturnPrinter(Printer[ReturnStatement]):
     def do_print(self, context: PrintContext) -> str:
         eval_printer = self.children()[0]
 
         return "return {0};".format(eval_printer.print(context.create_child()))
 
 
-class NamedCallableReferencePrinter(NodePrinter[NamedCallableReference]):
+class NamedCallableReferencePrinter(Printer[NamedCallableReference]):
     def do_print(self, context: PrintContext) -> str:
         return self.node().name()
 
 
-class ParameterPrinter(NodePrinter[Parameter]):
+class ParameterPrinter(Printer[Parameter]):
     def do_print(self, context: PrintContext) -> str:
         evaluation_printer = self.children()[0]
+
         return evaluation_printer.print(context.create_child())
 
 
-class ParameterListPrinter(NodePrinter[ParameterList]):
+class ParameterListPrinter(Printer[ParameterList]):
     def do_print(self, context: PrintContext) -> str:
         parameter_printers = self.children()
         return ", ".join([printer.print(context.create_child()) for printer in parameter_printers])
 
 
-class InvocationPrinter(NodePrinter[InvocationStatement]):
+class InvocationPrinter(Printer[InvocationStatement]):
     def do_print(self, context: PrintContext) -> str:
-        fn_printer, type_printer, parameter_list_printer = self.children()
+        fn_printer, parameter_list_printer = self.children()
 
         return "{0}({1})".format(
             fn_printer.print(context.create_child()), parameter_list_printer.print(context.create_child())
         )
+
+
+class BlankLinePrinter(Printer[BlankLineStatement]):
+    def do_print(self, context: PrintContext) -> str:
+        return "\n"
