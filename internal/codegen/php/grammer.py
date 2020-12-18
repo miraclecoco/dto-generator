@@ -1,9 +1,9 @@
 from typing import List
 
 from internal.codegen.common.printer import Printer, PrinterFactory
-from internal.codegen.ts.ast import Identifier, Type, StatementBlock, LeftValue, RightValue, Evaluation, Reference
-from internal.codegen.ts.element import VariableDeclaration, FunctionDeclaration, Modifier
-from internal.codegen.ts.util import StatementBlockCollection, ModifierList
+from internal.codegen.php.ast import Identifier, Type, StatementBlock, LeftValue, RightValue, Evaluation, Reference
+from internal.codegen.php.element import VariableDeclaration, FunctionDeclaration, Modifier
+from internal.codegen.php.util import StatementBlockCollection, ModifierList
 
 
 class Comment(StatementBlock):
@@ -19,7 +19,7 @@ class SingleLineComment(Comment):
         return self._content
 
     def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.ts.printer import SingleLineCommentPrinter
+        from internal.codegen.php.printer import SingleLineCommentPrinter
 
         return SingleLineCommentPrinter(self, parent)
 
@@ -32,7 +32,7 @@ class MultiLineComment(Comment):
         return self._content
 
     def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.ts.printer import MultiLineCommentPrinter
+        from internal.codegen.php.printer import MultiLineCommentPrinter
 
         return MultiLineCommentPrinter(self, parent)
 
@@ -49,7 +49,7 @@ class Class(StatementBlock):
         return Type(self.identifier().represent())
 
     def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.ts.printer import ClassPrinter
+        from internal.codegen.php.printer import ClassPrinter
 
         return ClassPrinter(self, parent, [self.identifier(), self._statement_blocks])
 
@@ -60,10 +60,10 @@ class Member(StatementBlock):
         self._declaration = declaration
 
     def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.ts.printer import MemberPrinter
+        from internal.codegen.php.printer import MemberPrinter
 
         return MemberPrinter(self, parent, [
-            self._modifiers, self._declaration.identifier(), self._declaration.type()
+            self._modifiers, self._declaration.identifier()
         ])
 
 
@@ -75,7 +75,7 @@ class Method(StatementBlock):
         self._statement_blocks = StatementBlockCollection(statement_blocks)
 
     def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.ts.printer import MethodPrinter
+        from internal.codegen.php.printer import MethodPrinter
 
         decl = self._declaration
 
@@ -132,7 +132,7 @@ class UnaryOperator(PrinterFactory):
         return self._type
 
     def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.ts.printer import UnaryOperatorPrinter
+        from internal.codegen.php.printer import UnaryOperatorPrinter
 
         return UnaryOperatorPrinter(self, parent)
 
@@ -156,7 +156,7 @@ class UnaryEvaluation(Evaluation):
         return self.operator().type()
 
     def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.ts.printer import UnaryEvaluationPrinter
+        from internal.codegen.php.printer import UnaryEvaluationPrinter
 
         return UnaryEvaluationPrinter(self, parent, [
             self.left(), self.operator(), self.right()
@@ -178,7 +178,7 @@ class UnaryAssignment(StatementBlock):
         return self.right().type()
 
     def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.ts.printer import UnaryAssignmentPrinter
+        from internal.codegen.php.printer import UnaryAssignmentPrinter
 
         return UnaryAssignmentPrinter(self, parent, [
             self.left(), self.right()
@@ -197,7 +197,7 @@ class AnyEvaluation(Evaluation):
         return self._type
 
     def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.ts.printer import AnyEvaluationPrinter
+        from internal.codegen.php.printer import AnyEvaluationPrinter
 
         return AnyEvaluationPrinter(self, parent)
 
@@ -248,7 +248,7 @@ class Accessor(Reference):
         self._parent = parent
 
     def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.ts.printer import AccessorPrinter
+        from internal.codegen.php.printer import AccessorPrinter
 
         return AccessorPrinter(self, parent)
 
@@ -263,7 +263,7 @@ class Scope:
 
 class ThisAccessor(Accessor):
     def __init__(self, scope: Scope):
-        super().__init__("this", scope.type())
+        super().__init__("$this", scope.type())
 
         self._scope = scope
 

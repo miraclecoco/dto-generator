@@ -5,6 +5,13 @@ from internal.spec import Field, Spec, aggregate_groups_from_fields
 from internal.codegen import Generator
 from internal.util import upper_first
 from internal.lang.php import Comment, VarAnnotation, ReturnAnnotation, ParamAnnotation
+from internal.codegen.php.ast import Type
+from internal.codegen.php.expr import SourceFile
+from internal.codegen.php.element import AccessModifier, StaticModifier, VariableDeclaration, FunctionDeclaration, \
+    ArgumentList, Argument
+from internal.codegen.php.extension import DocComment, Annotation
+from internal.codegen.php.grammer import Class, Member, Method, UnaryAssignment, ThisAccessor, Scope, AnyEvaluation, \
+    Accessor
 
 
 def code(s: str) -> str:
@@ -314,6 +321,40 @@ class PHPGenerator(Generator):
         return spec.lang().php().clazz()
 
     def generate(self, spec: Spec, fp: IO) -> None:
+        file = SourceFile([
+            Class("MyClass", [
+                DocComment("123", [
+                    Annotation.var("integer", "")
+                ]),
+                Member([AccessModifier.public(), StaticModifier()], VariableDeclaration("myProperty1", Type.string())),
+                Member([AccessModifier.public(), StaticModifier()],
+                       VariableDeclaration("myProperty2", Type.instance("Date"))),
+                Member([AccessModifier.public(), StaticModifier()], VariableDeclaration("myProperty3", Type.null())),
+                Member([AccessModifier.public(), StaticModifier()],
+                       VariableDeclaration("myProperty3", Type.undefined())),
+                Method(
+                    [AccessModifier.public()],
+                    FunctionDeclaration("myMethod1", Type.instance("Date"), ArgumentList([
+                        Argument("arg1", Type.string()),
+                        Argument("arg2", Type.boolean()),
+                        Argument("arg3", Type.instance("Date")),
+                    ])),
+                    [
+                        UnaryAssignment(
+                            Accessor.series([
+                                ThisAccessor(Scope(Type.instance("MyClass"))),
+                                Accessor("foo", Type.instance("Foo")),
+                                Accessor("bar", Type.instance("Bar")),
+                                Accessor("baz", Type.instance("Baz")),
+                                Accessor("val", Type.string()),
+                            ]), AnyEvaluation("123", Type.number()))
+                    ]
+                )
+            ])
+        ])
+        print(file.print())
+
+    def generate_old(self, spec: Spec, fp: IO) -> None:
         print(
             Fore.GREEN + "[DEBUG] class '{0}\\{1}' is being generated...".format(
                 spec.lang().php().namespace(),

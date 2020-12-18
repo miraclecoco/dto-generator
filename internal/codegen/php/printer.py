@@ -1,7 +1,7 @@
 from typing import List
 
 from internal.codegen.common.printer import Printer, PrinterFactory, PrintContext
-from internal.codegen.ts.grammer import SingleLineComment, MultiLineComment, Class, Member, Method, UnaryOperator, \
+from internal.codegen.php.grammer import SingleLineComment, MultiLineComment, Class, Member, Method, UnaryOperator, \
     UnaryEvaluation, UnaryAssignment, AnyEvaluation, Accessor
 
 
@@ -51,7 +51,7 @@ class MemberPrinter(Printer):
         self._node = node
 
     def do_print(self, context: PrintContext) -> str:
-        return "{0} {1}: {2};".format(*[
+        return "{0} ${1};".format(*[
             printer.print(context.create_child()) for printer in self.children()
         ])
 
@@ -63,7 +63,7 @@ class MethodPrinter(Printer):
         self._node = node
 
     def do_print(self, context: PrintContext) -> str:
-        return "{0} {1}({2}): {3} {{\n{4}\n}}".format(*[
+        return "{0} function {1}({2}) {{\n{4}\n}}".format(*[
             printer.print(context.create_child()) for printer in self.children()
         ])
 

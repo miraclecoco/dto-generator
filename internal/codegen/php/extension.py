@@ -1,6 +1,6 @@
 from typing import List
 
-from internal.codegen.ts.grammer import MultiLineComment
+from internal.codegen.php.grammer import MultiLineComment
 
 
 class DocComment(MultiLineComment):
@@ -29,11 +29,15 @@ class Annotation:
         self._value = value
 
     @staticmethod
-    def param(name: str, description: str = None) -> 'Annotation':
+    def param(name: str, typ: str, description: str = None) -> 'Annotation':
         if description is None:
-            return Annotation("param", "{0}".format(name))
+            return Annotation("param", "{0} {1}".format(typ, name))
 
-        return Annotation("param", "{0} {1}".format(name, description))
+        return Annotation("param", "{0} {1} {2}".format(typ, name, description))
+
+    @staticmethod
+    def var(typ: str, description: str = None) -> 'Annotation':
+        return Annotation("var", "{0} {1}".format(typ, description))
 
     def name(self) -> str:
         return self._name

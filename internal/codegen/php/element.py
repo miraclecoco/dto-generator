@@ -1,7 +1,7 @@
 from typing import List
 
-from internal.codegen.ts.ast import Identifier, Type
 from internal.codegen.common.printer import Printer, PrinterFactory, PrintContext
+from internal.codegen.php.ast import Identifier, Type
 
 
 class VariableDeclaration:
@@ -28,7 +28,7 @@ class Argument(PrinterFactory):
         return self._type
 
     def create_printer(self, parent: Printer) -> Printer:
-        return ArgumentPrinter(self, parent, [self.identifier(), self.type()])
+        return ArgumentPrinter(self, parent, [self.identifier()])
 
 
 class ArgumentPrinter(Printer):
@@ -39,7 +39,7 @@ class ArgumentPrinter(Printer):
 
     def do_print(self, context: PrintContext) -> str:
         components = [printer.print(context.create_child()) for printer in self.children()]
-        return "{0}: {1}".format(*components)
+        return "${0}".format(*components)
 
 
 class ArgumentList(PrinterFactory):
@@ -125,8 +125,3 @@ class AccessModifier(Modifier):
 class StaticModifier(Modifier):
     def __init__(self):
         super().__init__("static")
-
-
-class ReadonlyModifier(Modifier):
-    def __init__(self):
-        super().__init__("readonly")

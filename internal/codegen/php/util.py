@@ -1,8 +1,8 @@
 from typing import List, TypeVar, Generic
 
+from internal.codegen.php.ast import StatementBlock
+from internal.codegen.php.element import Modifier
 from internal.codegen.common.printer import Printer, PrinterFactory, PrintContext
-from internal.codegen.ts.ast import StatementBlock
-from internal.codegen.ts.element import Modifier
 
 T = TypeVar('T')
 

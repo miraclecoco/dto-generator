@@ -239,6 +239,3 @@ class HighOrderPrinter(Printer):
 
     def do_print(self, context: PrintContext) -> str:
         return self._print_fn(self, context)
-
-
-

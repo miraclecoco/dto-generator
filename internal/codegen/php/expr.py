@@ -1,9 +1,9 @@
 from typing import List
 
 from internal.codegen.common.printer import HighOrderPrinter, PrintContext, Printer, PrinterConfig
-from internal.codegen.ts.ast import StatementBlock
-from internal.codegen.ts.util import StatementBlockCollection
-from internal.codegen.ts.middleware import IndentMiddleware
+from internal.codegen.php.ast import StatementBlock
+from internal.codegen.php.util import StatementBlockCollection
+from internal.codegen.php.middleware import IndentMiddleware
 
 
 class SourceFile:

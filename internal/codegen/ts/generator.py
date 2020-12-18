@@ -1,16 +1,17 @@
 from typing import IO, List, Optional
-
 from colorama import Fore
 
 from internal.lang.ts import Comment, ParamAnnotation
 from internal.spec import Spec, Field, aggregate_groups_from_fields
 from internal.codegen import Generator
 from internal.util import upper_first
-from .ast import Type
-from .expr import SourceFile
-from .element import AccessModifier, StaticModifier, VariableDeclaration, FunctionDeclaration, ArgumentList, Argument
-from .extension import DocComment, Annotation
-from .grammer import Class, Member, Method, UnaryAssignment, ThisAccessor, Scope, AnyEvaluation, Accessor
+from internal.codegen.ts.ast import Type
+from internal.codegen.ts.expr import SourceFile
+from internal.codegen.ts.element import AccessModifier, StaticModifier, VariableDeclaration, FunctionDeclaration, \
+    ArgumentList, Argument
+from internal.codegen.ts.extension import DocComment, Annotation
+from internal.codegen.ts.grammer import Class, Member, Method, UnaryAssignment, ThisAccessor, Scope, AnyEvaluation, \
+    Accessor
 
 
 def code(s: str) -> str:
