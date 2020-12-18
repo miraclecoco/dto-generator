@@ -131,6 +131,8 @@ class PrintStateGenerator:
         if rule is None:
             rule = PrintStateTransitionRule.keep()
 
+        rule.apply(previous_state)
+
         return previous_state.clone()
 
 
@@ -141,6 +143,9 @@ class PrintStateTransitionRule:
     @staticmethod
     def keep() -> 'PrintStateTransitionRule':
         return PrintStateTransitionRule()
+
+    def apply(self, state: 'PrintState') -> None:
+        pass
 
 
 class PrintContext:

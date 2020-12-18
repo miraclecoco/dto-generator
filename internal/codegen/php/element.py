@@ -1,7 +1,7 @@
 from typing import List
 
 from internal.codegen.common.printer import Printer, PrinterFactory, PrintContext
-from internal.codegen.php.ast import Identifier, Type
+from internal.codegen.php.ast import Identifier, Type, Evaluation
 
 
 class VariableDeclaration:
@@ -16,7 +16,7 @@ class VariableDeclaration:
         return self._typ
 
 
-class Argument(PrinterFactory):
+class ArgumentDeclaration(PrinterFactory):
     def __init__(self, name: str, typ: Type):
         self._identifier = Identifier(name)
         self._type = typ
@@ -28,51 +28,33 @@ class Argument(PrinterFactory):
         return self._type
 
     def create_printer(self, parent: Printer) -> Printer:
-        return ArgumentPrinter(self, parent, [self.identifier()])
+        from internal.codegen.php.printer import ArgumentDeclarationPrinter
+
+        return ArgumentDeclarationPrinter(self, parent, [self.identifier()])
 
 
-class ArgumentPrinter(Printer):
-    def __init__(self, node: Argument, parent: Printer = None, children: List[PrinterFactory] = None):
-        super().__init__(parent, children)
-
-        self._node = node
-
-    def do_print(self, context: PrintContext) -> str:
-        components = [printer.print(context.create_child()) for printer in self.children()]
-        return "${0}".format(*components)
-
-
-class ArgumentList(PrinterFactory):
-    def __init__(self, arguments: List[Argument]):
+class ArgumentDeclarationList(PrinterFactory):
+    def __init__(self, arguments: List[ArgumentDeclaration]):
         self._arguments = arguments
 
     @staticmethod
     def empty():
-        return ArgumentList([])
+        return ArgumentDeclarationList([])
 
-    def arguments(self) -> List[Argument]:
+    def arguments(self) -> List[ArgumentDeclaration]:
         return self._arguments
 
     def length(self) -> int:
         return len(self._arguments)
 
     def create_printer(self, parent: Printer) -> Printer:
-        return ArgumentListPrinter(self, parent, self.arguments())
+        from internal.codegen.php.printer import ArgumentDeclarationListPrinter
 
-
-class ArgumentListPrinter(Printer):
-    def __init__(self, node: ArgumentList, parent: Printer = None, children: List[PrinterFactory] = None):
-        super().__init__(parent, children)
-
-        self._node = node
-
-    def do_print(self, context: PrintContext) -> str:
-        components = [printer.print(context.create_child()) for printer in self.children()]
-        return ", ".join(components)
+        return ArgumentDeclarationListPrinter(self, parent, self.arguments())
 
 
 class FunctionDeclaration:
-    def __init__(self, name: str, return_type: Type, argument_list: ArgumentList):
+    def __init__(self, name: str, return_type: Type, argument_list: ArgumentDeclarationList):
         self._identifier = Identifier(name)
         self._return_type = return_type
         self._argument_list = argument_list
@@ -83,8 +65,38 @@ class FunctionDeclaration:
     def return_type(self) -> Type:
         return self._return_type
 
-    def argument_list(self) -> ArgumentList:
+    def argument_list(self) -> ArgumentDeclarationList:
         return self._argument_list
+
+
+class Parameter(PrinterFactory):
+    def __init__(self, index: int, evaluation: Evaluation):
+        self._index = index
+        self._evaluation = evaluation
+
+    def index(self) -> int:
+        return self._index
+
+    def evaluation(self) -> Evaluation:
+        return self._evaluation
+
+    def create_printer(self, parent: Printer) -> Printer:
+        from internal.codegen.php.printer import ParameterPrinter
+
+        return ParameterPrinter(self, parent, [self.evaluation()])
+
+
+class ParameterList(PrinterFactory):
+    def __init__(self, parameters: List[Evaluation]):
+        self._parameters = [Parameter(index, parameters[index]) for index in range(len(parameters))]
+
+    def parameters(self) -> List[Parameter]:
+        return self._parameters
+
+    def create_printer(self, parent: Printer) -> Printer:
+        from internal.codegen.php.printer import ParameterListPrinter
+
+        return ParameterListPrinter(self, parent, self.parameters())
 
 
 class Modifier(PrinterFactory):

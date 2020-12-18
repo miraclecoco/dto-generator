@@ -1,9 +1,9 @@
 from typing import List
 
-from internal.codegen.php.grammer import MultiLineComment
+from internal.codegen.php.grammer import MultiLineCommentStatement
 
 
-class DocComment(MultiLineComment):
+class DocComment(MultiLineCommentStatement):
     def __init__(self, description: str, annotations: List['Annotation']):
         super().__init__([])
 

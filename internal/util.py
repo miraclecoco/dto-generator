@@ -1,3 +1,5 @@
+
+
 def upper_first(s: str):
     return s[0:1].upper() + s[1:]
 

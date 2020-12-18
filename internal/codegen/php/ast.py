@@ -1,9 +1,11 @@
-from typing import List
-
-from internal.codegen.common.printer import PrinterFactory, Printer, PrintContext
+from internal.codegen.common.printer import PrinterFactory, Printer
 
 
-class Identifier(PrinterFactory):
+class Node:
+    pass
+
+
+class Identifier(Node, PrinterFactory):
     def __init__(self, represent: str):
         self._represent = represent
 
@@ -11,20 +13,12 @@ class Identifier(PrinterFactory):
         return self._represent
 
     def create_printer(self, parent: Printer) -> Printer:
+        from internal.codegen.php.printer import IdentifierPrinter
+
         return IdentifierPrinter(self, parent)
 
 
-class IdentifierPrinter(Printer):
-    def __init__(self, node: Identifier, parent: Printer = None, children: List[PrinterFactory] = None):
-        super().__init__(parent, children)
-
-        self._node = node
-
-    def do_print(self, context: PrintContext) -> str:
-        return self._node.represent()
-
-
-class Type(PrinterFactory):
+class Type(Node, PrinterFactory):
     def __init__(self, represent: str):
         self._represent = represent
 
@@ -49,6 +43,10 @@ class Type(PrinterFactory):
         return Type("undefined")
 
     @staticmethod
+    def callable() -> 'Type':
+        return Type("callable")
+
+    @staticmethod
     def any() -> 'Type':
         return Type("any")
 
@@ -60,20 +58,12 @@ class Type(PrinterFactory):
         return self._represent
 
     def create_printer(self, parent: Printer) -> Printer:
+        from internal.codegen.php.printer import TypePrinter
+
         return TypePrinter(self, parent)
 
 
-class TypePrinter(Printer):
-    def __init__(self, node: Type, parent: Printer = None, children: List[PrinterFactory] = None):
-        super().__init__(parent, children)
-
-        self._node = node
-
-    def do_print(self, context: PrintContext) -> str:
-        return self._node.represent()
-
-
-class Expression(PrinterFactory):
+class Expression(Node, PrinterFactory):
     def type(self) -> Type:
         raise NotImplementedError()
 
@@ -81,7 +71,7 @@ class Expression(PrinterFactory):
         raise NotImplementedError()
 
 
-class Statement(PrinterFactory):
+class Statement(Node, PrinterFactory):
     def create_printer(self, parent: Printer) -> Printer:
         raise NotImplementedError()
 
@@ -91,7 +81,14 @@ class StatementBlock(Statement):
         raise NotImplementedError()
 
 
-class LeftValue(PrinterFactory):
+class BlankLine(StatementBlock):
+    def create_printer(self, parent: Printer) -> Printer:
+        from internal.codegen.php.printer import BlankLinePrinter
+
+        return BlankLinePrinter(self, parent)
+
+
+class LeftValue(Node, PrinterFactory):
     def type(self) -> Type:
         raise NotImplementedError()
 
@@ -118,6 +115,14 @@ class Evaluation(RightValue):
 class Reference(Evaluation, LeftValue):
     def type(self) -> Type:
         raise NotImplementedError()
+
+    def create_printer(self, parent: Printer) -> Printer:
+        raise NotImplementedError()
+
+
+class CallableReference(Evaluation):
+    def type(self) -> Type:
+        return Type.callable()
 
     def create_printer(self, parent: Printer) -> Printer:
         raise NotImplementedError()

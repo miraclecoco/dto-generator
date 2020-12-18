@@ -8,10 +8,12 @@ from internal.lang.php import Comment, VarAnnotation, ReturnAnnotation, ParamAnn
 from internal.codegen.php.ast import Type
 from internal.codegen.php.expr import SourceFile
 from internal.codegen.php.element import AccessModifier, StaticModifier, VariableDeclaration, FunctionDeclaration, \
-    ArgumentList, Argument
+    ArgumentDeclarationList, ArgumentDeclaration, ParameterList
 from internal.codegen.php.extension import DocComment, Annotation
-from internal.codegen.php.grammer import Class, Member, Method, UnaryAssignment, ThisAccessor, Scope, AnyEvaluation, \
-    Accessor
+from internal.codegen.php.grammer import ClassDeclaration, MemberDeclaration, MethodDeclaration, \
+    UnaryAssignmentStatement, \
+    AccessThisStatement, Scope, AnyEvaluation, \
+    AccessStatement, NamespaceDeclaration, InvocationStatement, NamedCallableReference
 
 
 def code(s: str) -> str:
@@ -244,6 +246,10 @@ def generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fie
     return s
 
 
+def f_generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fields: List[DeserializingField]) -> str:
+    pass
+
+
 def generate_to_array_method(fields: List[Field]) -> str:
     return generate_simple_serialize_method('toArray', [
         SerializingField(x.name(), x.type(), x.name()) for x in fields
@@ -322,32 +328,54 @@ class PHPGenerator(Generator):
 
     def generate(self, spec: Spec, fp: IO) -> None:
         file = SourceFile([
-            Class("MyClass", [
+            NamespaceDeclaration("CodelyTV\\Think\\Foo\\Bar"),
+            ClassDeclaration("MyClass", [
                 DocComment("123", [
                     Annotation.var("integer", "")
                 ]),
-                Member([AccessModifier.public(), StaticModifier()], VariableDeclaration("myProperty1", Type.string())),
-                Member([AccessModifier.public(), StaticModifier()],
-                       VariableDeclaration("myProperty2", Type.instance("Date"))),
-                Member([AccessModifier.public(), StaticModifier()], VariableDeclaration("myProperty3", Type.null())),
-                Member([AccessModifier.public(), StaticModifier()],
-                       VariableDeclaration("myProperty3", Type.undefined())),
-                Method(
+                MemberDeclaration(
+                    [AccessModifier.public(), StaticModifier()],
+                    VariableDeclaration("myProperty1", Type.string())
+                ),
+                MemberDeclaration(
+                    [AccessModifier.public(), StaticModifier()],
+                    VariableDeclaration("myProperty2", Type.instance("Date"))
+                ),
+                MemberDeclaration(
+                    [AccessModifier.public(), StaticModifier()],
+                    VariableDeclaration("myProperty3", Type.null())
+                ),
+                MemberDeclaration(
+                    [AccessModifier.public(), StaticModifier()],
+                    VariableDeclaration("myProperty3", Type.undefined())
+                ),
+                MethodDeclaration(
                     [AccessModifier.public()],
-                    FunctionDeclaration("myMethod1", Type.instance("Date"), ArgumentList([
-                        Argument("arg1", Type.string()),
-                        Argument("arg2", Type.boolean()),
-                        Argument("arg3", Type.instance("Date")),
+                    FunctionDeclaration("myMethod1", Type.instance("Date"), ArgumentDeclarationList([
+                        ArgumentDeclaration("arg1", Type.string()),
+                        ArgumentDeclaration("arg2", Type.boolean()),
+                        ArgumentDeclaration("arg3", Type.instance("Date")),
                     ])),
                     [
-                        UnaryAssignment(
-                            Accessor.series([
-                                ThisAccessor(Scope(Type.instance("MyClass"))),
-                                Accessor("foo", Type.instance("Foo")),
-                                Accessor("bar", Type.instance("Bar")),
-                                Accessor("baz", Type.instance("Baz")),
-                                Accessor("val", Type.string()),
-                            ]), AnyEvaluation("123", Type.number()))
+                        UnaryAssignmentStatement(
+                            AccessStatement.series([
+                                AccessThisStatement(Scope(Type.instance("MyClass"))),
+                                AccessStatement("foo", Type.instance("Foo")),
+                                AccessStatement("bar", Type.instance("Bar")),
+                                AccessStatement("baz", Type.instance("Baz")),
+                                AccessStatement("val", Type.string()),
+                            ]),
+                            AnyEvaluation("123", Type.number())
+                        ),
+                        InvocationStatement(
+                            NamedCallableReference("call"),
+                            Type.instance("Foo"),
+                            ParameterList([
+                                AnyEvaluation("1", Type.number()),
+                                AnyEvaluation('"123"', Type.string()),
+                                AnyEvaluation("foo()", Type.any()),
+                            ])
+                        )
                     ]
                 )
             ])

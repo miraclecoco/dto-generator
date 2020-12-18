@@ -1,17 +1,44 @@
 from typing import List
 
 from internal.codegen.common.printer import Printer, PrinterFactory
-from internal.codegen.php.ast import Identifier, Type, StatementBlock, LeftValue, RightValue, Evaluation, Reference
-from internal.codegen.php.element import VariableDeclaration, FunctionDeclaration, Modifier
+from internal.codegen.php.ast import Identifier, Type, StatementBlock, LeftValue, RightValue, Evaluation, Reference, \
+    CallableReference
+from internal.codegen.php.element import VariableDeclaration, FunctionDeclaration, Modifier, ParameterList
 from internal.codegen.php.util import StatementBlockCollection, ModifierList
 
 
-class Comment(StatementBlock):
+class NamespaceDeclaration(StatementBlock):
+    def __init__(self, name: str):
+        self._name = name
+
+    def name(self) -> str:
+        return self._name
+
+    def create_printer(self, parent: Printer) -> Printer:
+        from internal.codegen.php.printer import NamespacePrinter
+
+        return NamespacePrinter(self, parent)
+
+
+class UseStatement(StatementBlock):
+    def __init__(self, qualified_name: str):
+        self._qualified_name = qualified_name
+
+    def qualified_name(self) -> str:
+        return self._qualified_name
+
+    def create_printer(self, parent: Printer) -> Printer:
+        from internal.codegen.php.printer import UsePrinter
+
+        return UsePrinter(self, parent)
+
+
+class CommentStatement(StatementBlock):
     def create_printer(self, parent: Printer) -> Printer:
         raise NotImplementedError()
 
 
-class SingleLineComment(Comment):
+class SingleLineCommentStatement(CommentStatement):
     def __init__(self, content: str):
         self._content = content
 
@@ -24,7 +51,7 @@ class SingleLineComment(Comment):
         return SingleLineCommentPrinter(self, parent)
 
 
-class MultiLineComment(Comment):
+class MultiLineCommentStatement(CommentStatement):
     def __init__(self, lines: List[str]):
         self._content = lines
 
@@ -37,7 +64,7 @@ class MultiLineComment(Comment):
         return MultiLineCommentPrinter(self, parent)
 
 
-class Class(StatementBlock):
+class ClassDeclaration(StatementBlock):
     def __init__(self, name: str, statement_blocks: List[StatementBlock]):
         self._identifier = Identifier(name)
         self._statement_blocks = StatementBlockCollection(statement_blocks)
@@ -51,36 +78,51 @@ class Class(StatementBlock):
     def create_printer(self, parent: Printer) -> Printer:
         from internal.codegen.php.printer import ClassPrinter
 
-        return ClassPrinter(self, parent, [self.identifier(), self._statement_blocks])
+        return ClassPrinter(self, parent, [self._statement_blocks])
 
 
-class Member(StatementBlock):
-    def __init__(self, modifiers: List[Modifier], declaration: VariableDeclaration):
+class MemberDeclaration(StatementBlock):
+    def __init__(self, modifiers: List[Modifier], variable: VariableDeclaration):
         self._modifiers = ModifierList(modifiers)
-        self._declaration = declaration
+        self._variable = variable
+
+    def modifiers(self) -> ModifierList:
+        return self._modifiers
+
+    def variable(self) -> VariableDeclaration:
+        return self._variable
 
     def create_printer(self, parent: Printer) -> Printer:
         from internal.codegen.php.printer import MemberPrinter
 
         return MemberPrinter(self, parent, [
-            self._modifiers, self._declaration.identifier()
+            self.modifiers(), self.variable().identifier()
         ])
 
 
-class Method(StatementBlock):
-    def __init__(self, modifiers: List[Modifier], declaration: FunctionDeclaration,
+class MethodDeclaration(StatementBlock):
+    def __init__(self, modifiers: List[Modifier], function: FunctionDeclaration,
                  statement_blocks: List[StatementBlock]):
         self._modifiers = ModifierList(modifiers)
-        self._declaration = declaration
+        self._function = function
         self._statement_blocks = StatementBlockCollection(statement_blocks)
+
+    def modifiers(self) -> ModifierList:
+        return self._modifiers
+
+    def function(self) -> FunctionDeclaration:
+        return self._function
+
+    def statement_blocks(self) -> StatementBlockCollection:
+        return self._statement_blocks
 
     def create_printer(self, parent: Printer) -> Printer:
         from internal.codegen.php.printer import MethodPrinter
 
-        decl = self._declaration
+        decl = self.function()
 
         return MethodPrinter(self, parent, [
-            self._modifiers, decl.identifier(), decl.argument_list(), decl.return_type(), self._statement_blocks
+            self.modifiers(), decl.identifier(), decl.argument_list(), self.statement_blocks()
         ])
 
 
@@ -163,7 +205,7 @@ class UnaryEvaluation(Evaluation):
         ])
 
 
-class UnaryAssignment(StatementBlock):
+class UnaryAssignmentStatement(StatementBlock):
     def __init__(self, left: LeftValue, right: RightValue):
         self._left = left
         self._right = right
@@ -202,14 +244,14 @@ class AnyEvaluation(Evaluation):
         return AnyEvaluationPrinter(self, parent)
 
 
-class Accessor(Reference):
-    def __init__(self, name: str, typ: Type, parent: 'Accessor' = None):
+class AccessStatement(Reference):
+    def __init__(self, name: str, typ: Type, parent: 'AccessStatement' = None):
         self._name = name
         self._type = typ
         self._parent = parent
 
     @staticmethod
-    def series(accessors: List['Accessor']) -> 'Accessor':
+    def series(accessors: List['AccessStatement']) -> 'AccessStatement':
         if len(accessors) == 0:
             raise ValueError("'accessors' could not be empty")
 
@@ -231,26 +273,16 @@ class Accessor(Reference):
     def type(self) -> Type:
         return self._type
 
-    def parent(self) -> 'Accessor':
+    def parent(self) -> 'AccessStatement':
         return self._parent
 
-    def represent(self) -> str:
-        current = self
-        accessors = []
-
-        while current is not None:
-            accessors.append(current)
-            current = current.parent()
-
-        return '.'.join([accessor.name() for accessor in accessors[::-1]])
-
-    def set_parent(self, parent: 'Accessor') -> None:
+    def set_parent(self, parent: 'AccessStatement') -> None:
         self._parent = parent
 
     def create_printer(self, parent: Printer) -> Printer:
-        from internal.codegen.php.printer import AccessorPrinter
+        from internal.codegen.php.printer import AccessStatementPrinter
 
-        return AccessorPrinter(self, parent)
+        return AccessStatementPrinter(self, parent)
 
 
 class Scope:
@@ -261,7 +293,7 @@ class Scope:
         return self._type
 
 
-class ThisAccessor(Accessor):
+class AccessThisStatement(AccessStatement):
     def __init__(self, scope: Scope):
         super().__init__("$this", scope.type())
 
@@ -269,3 +301,50 @@ class ThisAccessor(Accessor):
 
     def scope(self) -> Scope:
         return self._scope
+
+
+class Return(StatementBlock):
+    def __init__(self, evaluation: Evaluation):
+        self._evaluation = evaluation
+
+    def evaluation(self) -> Evaluation:
+        return self._evaluation
+
+    def create_printer(self, parent: Printer) -> Printer:
+        from internal.codegen.php.printer import ReturnPrinter
+
+        return ReturnPrinter(self, parent, [self.evaluation()])
+
+
+class NamedCallableReference(CallableReference):
+    def __init__(self, name: str):
+        self._name = name
+
+    def name(self) -> str:
+        return self._name
+
+    def create_printer(self, parent: Printer) -> Printer:
+        from internal.codegen.php.printer import NamedCallableReferencePrinter
+
+        return NamedCallableReferencePrinter(self, parent)
+
+
+class InvocationStatement(Evaluation):
+    def __init__(self, call: CallableReference, typ: Type, parameters: ParameterList):
+        self._callable = call
+        self._type = typ
+        self._parameters = parameters
+
+    def callable(self) -> CallableReference:
+        return self._callable
+
+    def type(self) -> Type:
+        return self._type
+
+    def parameters(self) -> ParameterList:
+        return self._parameters
+
+    def create_printer(self, parent: Printer) -> Printer:
+        from internal.codegen.php.printer import InvocationPrinter
+
+        return InvocationPrinter(self, parent, [self.callable(), self.type(), self.parameters()])
