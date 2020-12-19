@@ -1,10 +1,20 @@
 from typing import List, Optional, IO
 from colorama import Fore
 
+from internal.codegen.php.convension import AccessModifier
 from internal.spec import Field, Spec, aggregate_groups_from_fields
 from internal.codegen import Generator
 from internal.util import upper_first
 from internal.lang.php import Comment, VarAnnotation, ReturnAnnotation, ParamAnnotation
+from internal.codegen.php.ast import Type, Identifier
+from internal.codegen.php.expr import SourceFile
+from internal.codegen.php.element import VariableDeclaration, FunctionDeclaration, \
+    ArgumentListDeclaration, ArgumentDeclaration, ParameterList
+from internal.codegen.php.extension import DocComment, Annotation
+from internal.codegen.php.grammer import ClassDeclaration, MemberDeclaration, MethodDeclaration, \
+    UnaryAssignmentStatement, \
+    ThisAccessor, Scope, AnyEvaluation, \
+    Accessor, NamespaceDeclaration, InvocationStatement, NamedCallableReference, MethodBody
 
 
 def code(s: str) -> str:
@@ -237,6 +247,10 @@ def generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fie
     return s
 
 
+def f_generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fields: List[DeserializingField]) -> str:
+    pass
+
+
 def generate_to_array_method(fields: List[Field]) -> str:
     return generate_simple_serialize_method('toArray', [
         SerializingField(x.name(), x.type(), x.name()) for x in fields
@@ -314,6 +328,46 @@ class PHPGenerator(Generator):
         return spec.lang().php().clazz()
 
     def generate(self, spec: Spec, fp: IO) -> None:
+        file = SourceFile([
+            NamespaceDeclaration("CodelyTV\\Think\\Foo\\Bar"),
+            ClassDeclaration(Identifier("MyClass"), [
+                MemberDeclaration(Identifier("myProperty1"), Type.string(), AccessModifier.public(), False),
+                MemberDeclaration(Identifier("myProperty2"), Type.string(), AccessModifier.public(), False),
+                MemberDeclaration(Identifier("myProperty3"), Type.string(), AccessModifier.public(), False),
+                MemberDeclaration(Identifier("myProperty4"), Type.string(), AccessModifier.public(), False),
+                MethodDeclaration(
+                    Identifier("myMethod1"), Type.string(), AccessModifier.public(), False,
+                    ArgumentListDeclaration([
+                        ArgumentDeclaration(Identifier("arg1"), Type.string()),
+                        ArgumentDeclaration(Identifier("arg2"), Type.string()),
+                        ArgumentDeclaration(Identifier("arg3"), Type.string())
+                    ]),
+                    MethodBody([
+                        UnaryAssignmentStatement(
+                            Accessor.series([
+                                ThisAccessor(Scope(Type.instance("MyClass"))),
+                                Accessor("foo", Type.instance("Foo")),
+                                Accessor("bar", Type.instance("Bar")),
+                                Accessor("baz", Type.instance("Baz")),
+                                Accessor("val", Type.string()),
+                            ]),
+                            AnyEvaluation("123", Type.number())
+                        ),
+                        InvocationStatement(
+                            NamedCallableReference("call"),
+                            Type.instance("Foo"),
+                            ParameterList([
+                                AnyEvaluation("1", Type.number()),
+                                AnyEvaluation('"123"', Type.string()),
+                                AnyEvaluation("foo()", Type.any()),
+                            ])
+                        )
+                    ])),
+            ])
+        ])
+        print(file.print())
+
+    def generate_old(self, spec: Spec, fp: IO) -> None:
         print(
             Fore.GREEN + "[DEBUG] class '{0}\\{1}' is being generated...".format(
                 spec.lang().php().namespace(),

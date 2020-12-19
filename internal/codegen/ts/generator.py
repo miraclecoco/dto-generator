@@ -1,11 +1,17 @@
 from typing import IO, List, Optional
-
 from colorama import Fore
 
 from internal.lang.ts import Comment, ParamAnnotation
 from internal.spec import Spec, Field, aggregate_groups_from_fields
 from internal.codegen import Generator
 from internal.util import upper_first
+from internal.codegen.ts.ast import Type
+from internal.codegen.ts.expr import SourceFile
+from internal.codegen.ts.element import AccessModifier, StaticModifier, VariableDeclaration, FunctionDeclaration, \
+    ArgumentList, Argument
+from internal.codegen.ts.extension import DocComment, Annotation
+from internal.codegen.ts.grammer import Class, Member, Method, UnaryAssignment, ThisAccessor, Scope, AnyEvaluation, \
+    Accessor
 
 
 def code(s: str) -> str:
@@ -78,7 +84,7 @@ def generate_comment(comment: Comment) -> str:
             lines.append("")
 
         for annotation in comment.annotations():
-            lines.append("@{0} {1}".format(annotation.name(), annotation.value()))
+            lines.append("@{0} {1}".format(annotation.identifier(), annotation.value()))
 
     s = ""
     s += "/**\n"
@@ -295,6 +301,40 @@ class TSGenerator(Generator):
         return spec.lang().ts().clazz()
 
     def generate(self, spec: Spec, fp: IO) -> None:
+        file = SourceFile([
+            Class("MyClass", [
+                DocComment("Member", [
+                    Annotation.param("myProperty1", "This is a description")
+                ]),
+                Member([AccessModifier.public(), StaticModifier()], VariableDeclaration("myProperty1", Type.string())),
+                Member([AccessModifier.public(), StaticModifier()],
+                       VariableDeclaration("myProperty2", Type.instance("Date"))),
+                Member([AccessModifier.public(), StaticModifier()], VariableDeclaration("myProperty3", Type.null())),
+                Member([AccessModifier.public(), StaticModifier()],
+                       VariableDeclaration("myProperty3", Type.undefined())),
+                Method(
+                    [AccessModifier.public()],
+                    FunctionDeclaration("myMethod1", Type.instance("Date"), ArgumentList([
+                        Argument("arg1", Type.string()),
+                        Argument("arg2", Type.boolean()),
+                        Argument("arg3", Type.instance("Date")),
+                    ])),
+                    [
+                        UnaryAssignment(
+                            Accessor.series([
+                                ThisAccessor(Scope(Type.instance("MyClass"))),
+                                Accessor("foo", Type.instance("Foo")),
+                                Accessor("bar", Type.instance("Bar")),
+                                Accessor("baz", Type.instance("Baz")),
+                                Accessor("val", Type.string()),
+                            ]), AnyEvaluation("123", Type.number()))
+                    ]
+                )
+            ])
+        ])
+        print(file.print())
+
+    def generate_old(self, spec: Spec, fp: IO) -> None:
         print(
             Fore.GREEN + "[DEBUG] class '{0}' is being generated...".format(
                 spec.lang().ts().clazz()
