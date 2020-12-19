@@ -6,37 +6,22 @@ class Annotation:
         raise NotImplemented()
 
 
-class VarAnnotation(Annotation):
-    def __init__(self, typ: str, var: str = None, desc: str = None) -> None:
-        self._typ = typ
+class ParamAnnotation(Annotation):
+    def __init__(self, var: str, desc: str = None) -> None:
         self._var = var
         self._desc = desc
 
     def name(self) -> str:
-        return "var"
+        return "param"
 
     def value(self) -> str:
         s = ""
-        s += self._typ
-
-        if self._var is not None:
-            s += " ${0}".format(self._var)
+        s += "{0}".format(self._var)
 
         if self._desc is not None:
-            s += " " + self._desc
+            s += " {0}".format(self._desc)
 
         return s
-
-
-class ReturnAnnotation(Annotation):
-    def __init__(self, typ: str) -> None:
-        self._typ = typ
-
-    def name(self) -> str:
-        return "return"
-
-    def value(self) -> str:
-        return self._typ
 
 
 class CustomAnnotation(Annotation):
