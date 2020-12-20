@@ -95,7 +95,10 @@ class ClassDeclaration(StatementBlock['ClassDeclaration']):
         return self._identifier
 
     def fields(self) -> StatementBlockCollection:
-        return self._fields
+        return self._fields.clone()
+
+    def add_field(self, stmt: StatementBlock):
+        self._fields.add(stmt)
 
     def is_logical(self) -> bool:
         return False
@@ -385,6 +388,52 @@ class NamedCallableReference(Callable['NamedCallableReference']):
         from internal.codegen.php.printer.grammer import NamedCallableReferencePrinter
 
         return NamedCallableReferencePrinter(self, parent)
+
+
+class ArrayElementDeclaration(Node, PrinterFactory):
+    def __init__(self, key: str, value: Evaluation):
+        super().__init__()
+        self._key = key
+        self._value = value
+
+    def key(self) -> str:
+        return self._key
+
+    def value(self) -> Evaluation:
+        return self._value
+
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import ArrayElementDeclarationPrinter
+
+        return ArrayElementDeclarationPrinter(self, parent, [self.value()])
+
+
+class ArrayDeclaration(Evaluation['ArrayDeclaration']):
+    def __init__(self, is_dictionary: bool, elements: List[ArrayElementDeclaration]):
+        super().__init__(elements)
+
+        self._as_dictionary = is_dictionary
+        self._elements = elements
+
+    def is_dictionary(self) -> bool:
+        return self._as_dictionary
+
+    def elements(self) -> List[ArrayElementDeclaration]:
+        return self._elements
+
+    def type(self) -> Type:
+        return Type.array()
+
+    def is_logical(self) -> bool:
+        return False
+
+    def create_printer(self, parent: BasePrinter) -> Printer:
+        from internal.codegen.php.printer.grammer import ArrayDeclarationPrinter
+
+        return ArrayDeclarationPrinter(self, parent, self.elements())
 
 
 class InvocationStatement(Evaluation['InvocationStatement']):

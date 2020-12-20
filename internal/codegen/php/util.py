@@ -22,6 +22,9 @@ class StatementBlockCollection(ListCollection[StatementBlock[T]], PrinterFactory
     def __init__(self, statement_blocks: List[StatementBlock[T]]):
         super().__init__(statement_blocks)
 
+    def clone(self) -> 'StatementBlockCollection[T]':
+        return StatementBlockCollection[T](self._elements)
+
     def create_printer(self, parent: Printer) -> Printer:
         return StatementBlockCollectionPrinter(self, parent, self.elements())
 

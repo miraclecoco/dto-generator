@@ -78,7 +78,15 @@ class Type(PhysicalComponent['Type']):
 
     @staticmethod
     def any() -> 'Type':
-        return Type("any")
+        return Type("mixed")
+
+    @staticmethod
+    def array() -> 'Type':
+        return Type("array")
+
+    @staticmethod
+    def dictionary() -> 'Type':
+        return Type("array")
 
     @staticmethod
     def instance(name: str) -> 'Type':

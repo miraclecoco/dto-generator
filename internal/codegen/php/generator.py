@@ -1,4 +1,4 @@
-from typing import List, Optional, IO
+from typing import List, Optional, IO, Tuple
 from colorama import Fore
 
 from internal.codegen.php.convension import AccessModifier
@@ -6,15 +6,16 @@ from internal.spec import Field, Spec, aggregate_groups_from_fields
 from internal.codegen import Generator
 from internal.util import upper_first
 from internal.lang.php import Comment, VarAnnotation, ReturnAnnotation, ParamAnnotation
-from internal.codegen.php.ast import Type, Identifier
+from internal.codegen.php.ast import Type, Identifier, StatementBlock
 from internal.codegen.php.expr import SourceFile
 from internal.codegen.php.element import VariableDeclaration, FunctionDeclaration, \
-    ArgumentListDeclaration, ArgumentDeclaration, ParameterList
-from internal.codegen.php.extension import DocComment, Annotation
+    ArgumentListDeclaration, ArgumentDeclaration, ParameterList, Parameter
+from internal.codegen.php.extension import DocCommentStatement, Annotation
 from internal.codegen.php.grammer import ClassDeclaration, MemberDeclaration, MethodDeclaration, \
     UnaryAssignmentStatement, \
     ThisAccessor, Scope, AnyEvaluation, \
-    Accessor, NamespaceDeclaration, InvocationStatement, NamedCallableReference, MethodBody
+    Accessor, NamespaceDeclaration, InvocationStatement, NamedCallableReference, MethodBody, ReturnStatement, \
+    ArrayDeclaration, ArrayElementDeclaration
 
 
 def code(s: str) -> str:
@@ -247,10 +248,6 @@ def generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fie
     return s
 
 
-def f_generate_simple_deserialize_method(method_name: str, clazz: str, n: int, fields: List[DeserializingField]) -> str:
-    pass
-
-
 def generate_to_array_method(fields: List[Field]) -> str:
     return generate_simple_serialize_method('toArray', [
         SerializingField(x.name(), x.type(), x.name()) for x in fields
@@ -318,6 +315,151 @@ def generate_deserialize_methods(spec: Spec) -> str:
     return '\n\n'.join(methods)
 
 
+def v1_generate_members(spec: Spec) -> List[StatementBlock]:
+    class_fields = []
+
+    for field in spec.fields():
+        class_fields.append(DocCommentStatement(
+            field.comment(), [
+                Annotation.types(field.type())
+            ]
+        ))
+        class_fields.append(MemberDeclaration(
+            Identifier(field.name()), Type(field.type()), AccessModifier.public(), False
+        ))
+
+    return class_fields
+
+
+def v1_generate_simple_serialize_method(method_name: str, fields: List[SerializingField]) -> List[StatementBlock]:
+    arr_elements = []
+
+    for field in fields:
+        lval = '$this->{0}'.format(field.name())
+        substituted_lval = lval
+
+        if field.convert_func() is not None:
+            substituted_lval = field.convert_func().format(expr=substituted_lval)
+
+        arr_elements.append(ArrayElementDeclaration(
+            field.serialized_name(),
+            AnyEvaluation("is_null({0}) ? null : {1}".format(lval, substituted_lval), Type.any())
+        ))
+
+    class_fields = [
+        DocCommentStatement(
+            None, [
+                Annotation.returns("array")
+            ]
+        ),
+        MethodDeclaration(
+            Identifier(method_name), Type.array(), AccessModifier.public(), False,
+            ArgumentListDeclaration([]),
+            MethodBody([
+                ReturnStatement(ArrayDeclaration(True, arr_elements))
+            ])
+        )
+    ]
+
+    return class_fields
+
+
+#
+# TODO(dev):
+#  use NewStatement instead NamedCallableReference
+def v1_generate_simple_deserialize_method(
+        method_name: str, clazz: str, n: int, fields: List[DeserializingField]
+) -> List[StatementBlock]:
+    parameters = []
+
+    for index in range(n):
+        parameters.append(AnyEvaluation("null", Type.any()))
+
+    for field in fields:
+        lval = '$data["{0}"]'.format(field.serialized_name())
+        substituted_lval = lval
+
+        if field.convert_func() is not None:
+            substituted_lval = field.convert_func().format(expr=substituted_lval)
+
+        parameters[field.position()] = AnyEvaluation(
+            "isset({0}) ? {1} : null".format(lval, substituted_lval), Type(field.type())
+        )
+
+    class_fields = [
+        DocCommentStatement(
+            None, [
+                Annotation.param("data", Type.dictionary().represent())
+            ]
+        ),
+        MethodDeclaration(
+            Identifier(method_name), Type(clazz), AccessModifier.public(), True,
+            ArgumentListDeclaration([
+                ArgumentDeclaration(Identifier("data"), Type.dictionary()),
+            ]),
+            MethodBody([
+                ReturnStatement(
+                    InvocationStatement(
+                        NamedCallableReference("new {0}".format(clazz)), Type(clazz),
+                        ParameterList(parameters)
+                    )
+                )
+            ])
+        )
+    ]
+
+    return class_fields
+
+
+def v1_generate_to_array_method(fields: List[Field]) -> List[StatementBlock]:
+    return v1_generate_simple_serialize_method('toArray', [
+        SerializingField(x.name(), x.type(), x.name()) for x in fields
+    ])
+
+
+def v1_generate_from_array_method(clazz: str, fields: List[Field]) -> List[StatementBlock]:
+    n = len(fields)
+
+    return v1_generate_simple_deserialize_method("fromArray", clazz, n, [
+        DeserializingField(pos, fields[pos].type(), fields[pos].name()) for pos in range(n)
+    ])
+
+
+def v1_generate_group_serializing_methods(fields: List[Field]) -> List[StatementBlock]:
+    aggregation = aggregate_groups_from_fields(fields)
+    stmts = []
+
+    for item in aggregation:
+        group_name = item[1]
+        fields = item[2]
+
+        method_name = 'to' + upper_first(group_name)
+
+        stmts.extend(v1_generate_simple_serialize_method(method_name, [
+            SerializingField(field[1].name(), field[1].type(), field[2].member()) for field in fields
+        ]))
+
+    return stmts
+
+
+def v1_generate_group_deserializing_methods(clazz: str, fields: List[Field]) -> List[StatementBlock]:
+    aggregation = aggregate_groups_from_fields(fields)
+    stmts = []
+
+    for item in aggregation:
+        n = item[0]
+        group_name = item[1]
+        fields = item[2]
+
+        method_name = 'from' + upper_first(group_name)
+
+        stmts.extend(v1_generate_simple_deserialize_method(method_name, clazz, n, [
+            DeserializingField(field[0], field[1].type(), field[2].member()) for field in fields
+        ]))
+
+    return stmts
+
+
 class PHPGenerator(Generator):
     @staticmethod
     def get_extension() -> str:
@@ -329,40 +471,13 @@ class PHPGenerator(Generator):
 
     def generate(self, spec: Spec, fp: IO) -> None:
         file = SourceFile([
-            NamespaceDeclaration("CodelyTV\\Think\\Foo\\Bar"),
-            ClassDeclaration(Identifier("MyClass"), [
-                MemberDeclaration(Identifier("myProperty1"), Type.string(), AccessModifier.public(), False),
-                MemberDeclaration(Identifier("myProperty2"), Type.string(), AccessModifier.public(), False),
-                MemberDeclaration(Identifier("myProperty3"), Type.string(), AccessModifier.public(), False),
-                MemberDeclaration(Identifier("myProperty4"), Type.string(), AccessModifier.public(), False),
-                MethodDeclaration(
-                    Identifier("myMethod1"), Type.string(), AccessModifier.public(), False,
-                    ArgumentListDeclaration([
-                        ArgumentDeclaration(Identifier("arg1"), Type.string()),
-                        ArgumentDeclaration(Identifier("arg2"), Type.string()),
-                        ArgumentDeclaration(Identifier("arg3"), Type.string())
-                    ]),
-                    MethodBody([
-                        UnaryAssignmentStatement(
-                            Accessor.series([
-                                ThisAccessor(Scope(Type.instance("MyClass"))),
-                                Accessor("foo", Type.instance("Foo")),
-                                Accessor("bar", Type.instance("Bar")),
-                                Accessor("baz", Type.instance("Baz")),
-                                Accessor("val", Type.string()),
-                            ]),
-                            AnyEvaluation("123", Type.number())
-                        ),
-                        InvocationStatement(
-                            NamedCallableReference("call"),
-                            Type.instance("Foo"),
-                            ParameterList([
-                                AnyEvaluation("1", Type.number()),
-                                AnyEvaluation('"123"', Type.string()),
-                                AnyEvaluation("foo()", Type.any()),
-                            ])
-                        )
-                    ])),
+            NamespaceDeclaration(spec.lang().php().namespace()),
+            ClassDeclaration(Identifier(spec.lang().php().clazz()), [
+                *v1_generate_members(spec),
+                *v1_generate_from_array_method(spec.lang().php().clazz(), spec.fields()),
+                *v1_generate_group_deserializing_methods(spec.lang().php().clazz(), spec.fields()),
+                *v1_generate_to_array_method(spec.fields()),
+                *v1_generate_group_serializing_methods(spec.fields())
             ])
         ])
         print(file.print())

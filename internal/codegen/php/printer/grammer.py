@@ -1,11 +1,12 @@
 from typing import TypeVar
 
 from internal.codegen.common.printer import PrintContext
+from internal.codegen.common.util import ListCollection
 from internal.codegen.php.element import ArgumentDeclaration, ArgumentListDeclaration, ParameterList, Parameter
 from internal.codegen.php.grammer import SingleLineCommentStatement, MultiLineCommentStatement, ClassDeclaration, \
     MemberDeclaration, MethodDeclaration, UnaryEvaluation, UnaryAssignmentStatement, AnyEvaluation, Accessor, \
     UseStatement, NamespaceDeclaration, ReturnStatement, InvocationStatement, NamedCallableReference, \
-    BlankLineStatement, MethodBody
+    BlankLineStatement, MethodBody, ArrayDeclaration, ArrayElementDeclaration
 from internal.codegen.php.printer.common import Printer
 
 T = TypeVar('T')
@@ -153,6 +154,31 @@ class InvocationPrinter(Printer[InvocationStatement]):
         return "{0}({1})".format(
             fn_printer.print(context.create_child()), parameter_list_printer.print(context.create_child())
         )
+
+
+class ArrayElementDeclarationPrinter(Printer[ArrayElementDeclaration]):
+    def do_print(self, context: 'PrintContext') -> str:
+        parent_printer = self.parent()  # type: Printer[ArrayDeclaration]
+        value_printer = self.children()[0]
+
+        if parent_printer.node().is_dictionary():
+            return '"{0}" => {1}'.format(self.node().key(), value_printer.print(context.create_child()))
+        else:
+            return "{0}".format(value_printer.print(context.create_child()))
+
+
+class ArrayDeclarationPrinter(Printer[ArrayDeclaration]):
+    def do_print(self, context: 'PrintContext') -> str:
+        element_printers = self.children()
+        exprs = [printer.print(context.create_child()) for printer in element_printers]
+
+        needs_wrap = ListCollection(exprs).reduce(0, lambda n, elem: n + len(elem)) > 80
+        indent = context.config().indent().process(1)
+
+        if needs_wrap:
+            return "array(\n{0}{1}\n)".format(indent, ",\n{0}".format(indent).join(exprs))
+        else:
+            return "array({0})".format(", ".join(exprs))
 
 
 class BlankLinePrinter(Printer[BlankLineStatement]):
